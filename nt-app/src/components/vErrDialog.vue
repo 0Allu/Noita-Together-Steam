@@ -45,6 +45,8 @@ export default {
 }
 
 .err-dialog-container {
+    width: 440px;
+    box-sizing: border-box;
     max-width: 80%;
     margin: 0px auto;
     padding: 1.2em 1.3em;
@@ -63,7 +65,12 @@ export default {
 .err-dialog-body {
     display: flex;
     flex-flow: row wrap;
-    margin: 20px 0;
+    margin: 0 0 20px;
+    line-height: 1.45;
+}
+
+.err-dialog-body p {
+    margin: 0;
 }
 
 .err-dialog-footer {

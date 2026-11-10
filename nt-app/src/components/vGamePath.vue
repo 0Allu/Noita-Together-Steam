@@ -1,17 +1,25 @@
 <template>
-    <vModal>
-        <h1 slot="header">Game not found</h1>
-        <template slot="body">
-            <p>Please select the game folder where noita.exe is located</p>
-            <div class="game-path">
-                <vInput v-model="nothing" :label="gamePath" :disabled="true" />
-                <vButton @click="browseDialog" >
-                    browse
-                </vButton>
+    <vModal size="medium">
+        <h1 slot="header" class="dialog-title">
+            <i class="fas fa-folder-open dialog-icon warn"></i>
+            Where is Noita installed?
+        </h1>
+        <div slot="body" class="form">
+            <p class="dialog-text">
+                Pick the folder that contains <span class="code">noita.exe</span> so the mod can be installed.
+                In Steam: right-click Noita, Manage, Browse local files.
+            </p>
+            <div class="field-row">
+                <label class="field" :class="{ invalid: error }">
+                    <i class="fas fa-folder"></i>
+                    <input :value="gamePath" placeholder="No folder selected" readonly />
+                </label>
+                <vButton size="btn-field" @click="browseDialog">Browse</vButton>
             </div>
-        </template>
-        <div slot="footer" class="centered">
-            <vButton @click="setPath" :disabled="!canUpdate">Update</vButton>
+            <span v-if="error" class="form-error">{{ error }}</span>
+        </div>
+        <div slot="footer" class="dialog-actions">
+            <vButton class="btn-primary" @click="setPath" :disabled="!canUpdate">Install mod</vButton>
         </div>
     </vModal>
 </template>
@@ -19,7 +27,6 @@
 <script>
 import vModal from "../components/vModal.vue";
 import vButton from "../components/vButton.vue";
-import vInput from "../components/vInput.vue";
 import { remote } from "electron";
 import path from "path";
 import fs from "fs";
@@ -29,12 +36,11 @@ export default {
     components: {
         vButton,
         vModal,
-        vInput,
     },
     data() {
         return {
-            nothing: "",
-            gamePath: "game path",
+            gamePath: "",
+            error: "",
             canUpdate: false,
         };
     },
@@ -48,16 +54,14 @@ export default {
                 .then((res) => {
                     if (res.filePaths.length > 0) {
                         const gamePath = res.filePaths.shift();
+                        this.gamePath = gamePath;
                         if (fs.existsSync(path.join(gamePath, "/noita.exe"))) {
-                            this.gamePath = gamePath;
+                            this.error = "";
                             this.canUpdate = true;
                         } else {
                             this.canUpdate = false;
-                            this.gamePath = "Noita.exe not found";
+                            this.error = "There's no noita.exe in that folder.";
                         }
-                    } else {
-                        this.canUpdate = false;
-                        this.gamePath = "No folder selected(?)";
                     }
                 });
         },
@@ -66,16 +70,5 @@ export default {
 </script>
 
 <style>
-.game-path {
-    width: 100%;
-    display: flex;
-}
-
-.game-path .labeled-input{
-    width: 90%;
-    margin-top: auto;
-    padding: 0;
-    margin-right: 0;
-}
 
 </style>

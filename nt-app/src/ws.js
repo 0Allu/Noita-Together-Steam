@@ -1,6 +1,5 @@
 const { v4: uuidv4 } = require("uuid")
-const { ipcMain, net } = require("electron")
-const ws = require("ws")
+const { app, ipcMain } = require("electron")
 const {
     encodeLobbyMsg,
     encodeGameMsg,
@@ -8,42 +7,26 @@ const {
 } = require("./handlers/messageHandler")
 const appEvent = require("./appEvent")
 const noita = require("./noita")
-const { NT } = require("@noita-together/nt-message")
 const { encodeFrames } = require("./frameCoder")
+const { SteamTransport } = require("./steam/transport")
 
-const { host, sni } = (() => {
-    const prefix =
-        process.env.VUE_APP_LOBBY_SERVER_WS_URL_BASE ||
-        `wss://` + (process.env.VUE_APP_HOSTNAME_WS || "noitatogether.com/ws/")
-    const host = prefix.endsWith("/") ? prefix : `${prefix}/`
-    const url = new URL(host)
-    const sni = url.hostname
-
-    return { host, sni }
-})()
-
-const print = true
+// The lobby server is gone: rooms are Steam lobbies, and the room host's app
+// runs the room logic (see ./steam). Everything below still speaks the same
+// protobuf messages it used to exchange with the server.
+let connected = false
 module.exports = (data) => {
+    if (connected) {
+        // already wired up (e.g. the login view retried)
+        appEvent("CONNECTED", data)
+        return
+    }
+    connected = true
     const user = { userId: data.id, name: data.display_name }
     noita.setUser({ userId: user.userId, name: user.name, host: false })
     let isHost = false
 
-    console.log(`Connect to lobby server ${host}`)
-    /** @type {WebSocket} */
-    let client = new ws(`${host}${data.token}`, {
-        servername: sni
-    })
-
-    const heartbeat = NT.Envelope.encode({}).finish()
-    let timer = setInterval(() => {
-        if (client && client.readyState === ws.OPEN) {
-            // uWS does not appear to be reliable with its "auto-ping" functionality,
-            // and does not appear to respect websocket-level pings for keeping connections
-            // alive. Send an empty envelope (will be ignored by the lobby server) to
-            // keep the connection active.
-            client.send(heartbeat)
-        }
-    }, 10000)
+    console.log(`Connected to Steam as ${user.name} (${user.userId})`)
+    let client = new SteamTransport(user, app.getVersion())
 
     const lobby = {
         sHostStart: (payload) => {
@@ -102,49 +85,22 @@ module.exports = (data) => {
             isHost = true
         },
         sRoomDeleted: (payload) => {
+            isHost = false
             noita.reset()
         }
     }
 
-    client.on("open", () => {
-        appEvent("CONNECTED", data)
+    client.on("lobby", (info) => {
+        appEvent("STEAM_LOBBY", info)
     })
 
-    client.addEventListener("close", (event) => {
-        clearInterval(timer)
-        timer = undefined
-        const reason = event.reason ? event.reason : "no_reason_supplied"
-        //codes https://github.com/Luka967/websocket-close-codes
-        console.log('addEventListener: WS had an error :(')
-        console.log(event)
-        const url = `https://stat.moistmob.com/disconnected/${event.code}/${encodeURI(reason.toString().slice(0, 200))}`
-        console.log(`CONNECTION_LOST with a code of ${event.code}. Send a message to ${url}`)
-        const req = net.request({
-            url: url,
-            method: 'GET'
-        })
-        req.on('response', (response)=> {
-            console.log(`STATUS: ${response.statusCode}`);
-            console.log(`HEADERS: ${JSON.stringify(response.headers)}`);
+    client.on("joinRequested", (info) => {
+        appEvent("STEAM_JOIN_REQUESTED", info)
+    })
 
-            response.on('data', (chunk) => {
-                console.log(`BODY: ${chunk}`)
-            });
-        })
-        req.on('error', (error) => {
-            console.log('failed to send status. probably an internet issue')
-            console.log(error)
-        })
-        req.end()
-        appEvent("CONNECTION_LOST", {code: event.code, reason: reason})
+    client.on("closed", () => {
+        appEvent("CONNECTION_LOST", { code: 0, reason: "the Steam helper stopped. Is Steam still running?" })
         noita.clientDisconnected()
-        client.terminate()
-        client = null
-    });
-
-    client.on('error', (err) => {
-        console.log('WS had an error :(')
-        console.log(err)
     })
 
     /**
@@ -207,6 +163,10 @@ module.exports = (data) => {
         }
     })
 
+    ipcMain.on("STEAM_LOBBY_TYPE", (e, type) => {
+        client.setLobbyType(type)
+    })
+
     ipcMain.on("CLIENT_MESSAGE", (e, data) => {
         const msg = encodeLobbyMsg(data.key, data.payload)
         sendMsg(msg)
@@ -253,7 +213,7 @@ module.exports = (data) => {
                         noita.clientDisconnected()
                         return
                     case '/dcthesocket':
-                        client.close()
+                        client.onPeerLeft(client.hostId)
                         return
                 }
             }
@@ -269,6 +229,7 @@ module.exports = (data) => {
     })
 
     noita.on("GAME_OPEN", () => {
+        appEvent("noita_connection", true)
         noita.sendEvt("RequestGameInfo")
         noita.sendEvt("RequestSpellList")
 
@@ -285,6 +246,7 @@ module.exports = (data) => {
     })
 
     noita.on("GAME_CLOSE", () => {
+        appEvent("noita_connection", false)
         unready()
     })
 
@@ -387,6 +349,8 @@ module.exports = (data) => {
             client.send(msg)
         }
     }
+
+    appEvent("CONNECTED", data)
 
     function unready() {
         const msg = encodeLobbyMsg("cReadyState", {

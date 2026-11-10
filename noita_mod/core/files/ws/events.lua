@@ -3,6 +3,12 @@ dofile("mods/noita-together/files/scripts/hourglass_events.lua")
 dofile_once("mods/noita-together/files/scripts/ban_perks_events.lua")
 
 customEvents = {
+    SharedGold = function(data)
+        if (SharedPoolsOnGold ~= nil) then SharedPoolsOnGold(data) end
+    end,
+    SharedHealth = function(data)
+        if (SharedPoolsOnHealth ~= nil) then SharedPoolsOnHealth(data) end
+    end,
     PlayerPOI = function(data)
         local user = PlayerList[data.userId]
         if (user == nil) then
@@ -117,6 +123,7 @@ wsEvents = {
         SendWsEvent({ event = "GameInfo", payload = { seed = seed, mods = mods, version = "v0.20.0", beta = GameIsBetaBuild() } })
         SendWsEvent({ event = "RequestPlayerList", payload = {} })
         PopulateSpellList()
+        SendGamePerkList()
     end,
     PlayerMove = function(data)
         local last = data.frames[math.floor(#data.frames / 2)]
@@ -211,7 +218,7 @@ wsEvents = {
         else
             PlayerList[data.userId].curHp = 0
             --msg = PlayerList[data.userId].name .. " has died." --changed the text of this, so just commenting out for now..
-            if (GameHasFlagRun("NT_death_penalty_end") or GameHasFlagRun("NT_death_penalty_weak_respawn")) then
+            if (GameHasFlagRun("NT_death_penalty_end") or GameHasFlagRun("NT_death_penalty_weak_respawn") or GameHasFlagRun("NT_death_penalty_shared_health")) then
                 NT.end_msg = GameTextGet("$noitatogether_player_died", PlayerList[data.userId].name)
                 FinishRun()
             end
@@ -253,6 +260,9 @@ wsEvents = {
             elseif (entry.flag == "NT_sync_orb_count") then
                 ModSettingSet("noita_together.orb_count_max", entry.uIntVal)
                 --nt print_error("Max orb count was changed to "..entry.uIntVal)
+            elseif (entry.flag == "NT_banned_perks") then
+                -- comma separated perk ids, read by ban_perks.lua; must come before NT_ban_perks
+                GlobalsSetValue("NT_banned_perks", entry.strVal or "")
             elseif (entry.flag == "NT_ban_perks") then
                 GameAddFlagRun(entry.flag)
                 HandleBannedPerksEvent()

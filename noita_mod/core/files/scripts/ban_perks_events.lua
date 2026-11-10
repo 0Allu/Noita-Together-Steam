@@ -31,12 +31,17 @@ local function ForceGetPlayerId()
             end
         end
     end
+    return player_id
 end
 
 local function BannedPerksDataTable()
     local banned_perk_data = {}
     for _, perk_id in ipairs(BannedPerksTable()) do
-        table.insert(banned_perk_data, get_perk_with_id(perk_list, perk_id))
+        -- skip ids this version of the game doesn't know (typos, other mods' perks)
+        local perk_data = get_perk_with_id(perk_list, perk_id)
+        if perk_data ~= nil then
+            table.insert(banned_perk_data, perk_data)
+        end
     end
     return banned_perk_data
 end

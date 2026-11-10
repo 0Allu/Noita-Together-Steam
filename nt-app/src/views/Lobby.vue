@@ -8,21 +8,20 @@
         <vRoomPassword
             v-if="showPasswordModal"
             :id="clickedRoom"
+            :optional="passwordOptional"
             @join="joinRoom"
             @close="closePasswordModal"
         />
         <div class="lobby-header">
             <h1>Rooms</h1>
-            <div class="lobby-controls">
-                <vInput v-model="roomFilter" label="filter" />
-                <div>
+            <div class="lobby-actions">
                 <vButton @click="openRoomCreation">
                     <template slot="icon">
                         <i class="fas fa-plus-square"></i>
                     </template>
                     Create
                 </vButton>
-                <vButton @click="refreshRooms">
+                <vButton @click="refreshRooms" title="Refresh the room list">
                     <template slot="icon">
                         <i
                             class="fas fa-spinner fa-spin fa-pulse"
@@ -32,8 +31,25 @@
                     </template>
                     Refresh
                 </vButton>
-                </div>
             </div>
+        </div>
+        <div class="lobby-toolbar">
+            <label class="field lobby-filter">
+                <i class="fas fa-search"></i>
+                <input v-model="roomFilter" placeholder="Filter by room or owner" spellcheck="false" />
+            </label>
+            <form class="join-code" @submit.prevent="joinByCode">
+                <label class="field">
+                    <i class="fas fa-key"></i>
+                    <input v-model="joinCode" placeholder="Invite code" spellcheck="false" />
+                </label>
+                <vButton size="btn-field" :disabled="!joinCode.trim()" title="Join a room with its invite code">
+                    <template slot="icon">
+                        <i class="fas fa-sign-in-alt"></i>
+                    </template>
+                    Join
+                </vButton>
+            </form>
         </div>
 
         <div class="lobbies-wrapper scroll-y">
@@ -47,18 +63,25 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-if="rooms.length == 0">
-                        <td id="no-rooms" colspan="4">No rooms</td>
+                    <tr v-if="filteredRooms.length == 0" class="no-rooms-row">
+                        <td id="no-rooms" colspan="4">
+                            <template v-if="rooms.length == 0">
+                                No public rooms right now. Create one, or join a friend's room with their invite code.
+                            </template>
+                            <template v-else>No rooms match "{{ roomFilter }}".</template>
+                        </td>
                     </tr>
                     <tr
                         v-else
                         v-for="room in filteredRooms"
                         :key="room.id"
+                        class="room-row"
+                        title="Double-click to join"
                         @dblclick="joinRoom(room.id, room.protected)"
                     >
                         <td>
-                            <i class="fas fa-ban" v-if="room.locked"> </i>
-                            <i class="fas fa-lock" v-if="room.protected"> </i>
+                            <i class="fas fa-ban room-icon" v-if="room.locked" title="Locked: no one can join right now"></i>
+                            <i class="fas fa-lock room-icon" v-if="room.protected" title="Needs a password"></i>
                             <span>{{ room.name }}</span>
                         </td>
                         <td>{{room.owner}}</td>
@@ -73,15 +96,13 @@
 
 <script>
 import vButton from "../components/vButton.vue";
-import vInput from "@/components/vInput.vue";
 import vRoomCreation from "../components/vRoomCreation.vue";
 import vRoomPassword from "../components/vRoomPassword.vue";
 export default {
     components: {
         vButton,
         vRoomCreation,
-        vRoomPassword,
-        vInput
+        vRoomPassword
     },
     data() {
         return {
@@ -89,7 +110,9 @@ export default {
             showRoomCreation: false,
             refreshing: false,
             clickedRoom: "",
-            roomFilter: ""
+            passwordOptional: false,
+            roomFilter: "",
+            joinCode: ""
         };
     },
     beforeCreate() {
@@ -132,12 +155,21 @@ export default {
         closePasswordModal() {
             this.showPasswordModal = false;
         },
+        joinByCode() {
+            if (!this.joinCode.trim()) return;
+            // invite codes don't say whether the room has a password, so always offer the field
+            this.clickedRoom = this.joinCode.trim();
+            this.passwordOptional = true;
+            this.openPasswordModal();
+        },
         joinRoom(id, password) {
             if (typeof password == "boolean" && password) {
                 this.clickedRoom = id;
+                this.passwordOptional = false;
                 this.openPasswordModal();
                 return;
             }
+            this.closePasswordModal();
             try {
                 this.$store.dispatch("joinRoom", {
                     id,
@@ -177,17 +209,45 @@ export default {
     align-items: center;
 }
 
-.lobby-controls {
+.lobby-header > h1 {
+    margin: 0.4em 0;
+}
+
+.lobby-actions {
     display: flex;
-    flex-flow:  row wrap;
+    gap: 6px;
     margin-left: auto;
 }
 
-.lobby-controls .labeled-input{
-    min-width: 20%;
-    margin-top: auto;
-    padding-bottom: 0;
-    margin-right: 0;
+.lobby-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.lobby-filter {
+    flex: 1 1 auto;
+    max-width: 320px;
+}
+
+.join-code {
+    display: flex;
+    margin: 0 0 0 auto;
+}
+
+.join-code .field {
+    width: 170px;
+    border-right: none;
+}
+
+.room-row {
+    cursor: pointer;
+}
+
+.room-icon {
+    margin-right: 0.45em;
+    opacity: 0.75;
 }
 
 .lobbies-wrapper {
@@ -198,9 +258,15 @@ export default {
     position: sticky;
 }
 
+.no-rooms-row:hover {
+    background: none !important;
+}
+
 #no-rooms {
     width: 100%;
     text-align: center;
+    padding: 2.5em 1em;
+    color: rgba(255, 255, 255, 0.5);
 }
 
 .lobbies-wrapper table td:nth-child(1n + 0) {

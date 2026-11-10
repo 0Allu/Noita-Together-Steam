@@ -3,18 +3,16 @@ const NT_SCHEME = "noitatogether"
 const path = require("path")
 const fs = require("fs")
 import { autoUpdater } from "electron-updater"
-import { app, protocol, BrowserWindow, dialog, ipcMain } from "electron"
-import jwt from "jsonwebtoken"
+import { app, protocol, BrowserWindow, ipcMain } from "electron"
 import { createProtocol } from "vue-cli-plugin-electron-builder/lib"
 import installExtension, { VUEJS_DEVTOOLS } from "electron-devtools-installer"
 import { updateMod } from "./update.js"
 const appEvent = require("./appEvent")
 const wsClient = require("./ws.js")
 const cmdLineArgs = require("./cmdLineArgs")
-const keytar = require("keytar")
-const got = require("got")
-const http = require("http")
-let rememberUser = false
+const steamBridge = require("./steam/bridge")
+// "Start Noita" button (Steam won't start Noita while we're signed in as it)
+require("./launchNoita")
 const isDevelopment = process.env.NODE_ENV !== "production"
 const primaryInstance = app.requestSingleInstanceLock()
 let mainWindow = null
@@ -32,48 +30,6 @@ if (isDevelopment && process.platform === 'win32') {
     }
 }
 */
-const loginserv = http.createServer(function (req, res) {
-    let url = new URL("noitatogether:/" + req.url)
-    let token = url.searchParams.get("token")
-    if (!token) {
-        res.writeHead(400)
-        res.end('Missing required param "token"')
-        return
-    }
-    let refreshToken = url.searchParams.get("refresh")
-    let extra = url.searchParams.get("e")
-
-    const jwtDecoded = jwt.decode(token)
-    const { preferred_username, sub } = jwtDecoded
-    if (!preferred_username) {
-        res.writeHead(404, { "Content-Type": "text/html" })
-        res.end("nothing here.")
-        return
-    }
-    if (rememberUser) {
-        keytar.setPassword("Noita Together", preferred_username, refreshToken)
-    }
-    appEvent("USER_EXTRA", extra)
-    wsClient({
-        display_name: preferred_username,
-        token,
-        id: sub
-    })
-
-    if (mainWindow) {
-        if (mainWindow.isMinimized()) {
-            mainWindow.restore()
-        }
-        mainWindow.focus()
-    }
-
-    res.writeHead(200, { "Content-Type": "text/html" })
-    res.end("You can close this. " +
-        "<br/><a href='https://noitatogether.com/'>Noita Together Website</a>" +
-        "<br/><a href='https://github.com/Noita-Together/noita-together/wiki/FAQ'>FAQ</a>")
-    loginserv.close()
-})
-
 autoUpdater.on("update-downloaded", (info) => {
     appEvent("UPDATE_DOWNLOADED", "")
 })
@@ -112,7 +68,10 @@ async function createWindow() {
         */
         // Load the index.html when not in development
         mainWindow.loadURL("app://./index.html")
-        if (!isDevelopment) autoUpdater.checkForUpdatesAndNotify()
+        // Official releases on GitHub are the retired server-based client, so
+        // auto-updating from them would replace this Steam build. Re-enable
+        // once Steam builds are published as releases.
+        // if (!isDevelopment) autoUpdater.checkForUpdatesAndNotify()
     }
 }
 
@@ -122,12 +81,6 @@ ipcMain.on("update_mod", (event, gamePath) => {
         return
     }
 
-    keytar.findCredentials("Noita Together").then((credentials) => {
-        if (credentials.length > 0) {
-            const username = credentials[0].account
-            appEvent("SAVED_USER", username)
-        }
-    })
     if (gamePath) {
         const userDataPath = path.join(
             app.getPath("userData"),
@@ -138,45 +91,34 @@ ipcMain.on("update_mod", (event, gamePath) => {
     updateMod(gamePath)
 })
 
-ipcMain.on("remember_user", (event, val) => {
-    rememberUser = val
-})
-
-ipcMain.on("TRY_LOGIN", async (event, account) => {
+// Twitch login and the noitatogether.com servers are gone; your identity is
+// your Steam account, and rooms are Steam lobbies.
+ipcMain.on("STEAM_LOGIN", async () => {
     try {
-        const refresh = await keytar.getPassword("Noita Together", account)
-        const { body } = await got.post(
-            `${process.env.VUE_APP_HOSTNAME}/auth/refresh`,
-            {
-                headers: {
-                    authorization: `Bearer ${refresh}`
-                },
-                responseType: "json"
-            }
-        )
-        const { token } = body
-        appEvent("USER_EXTRA", undefined)
-        let decoded = jwt.decode(token)
-        let { sub, preferred_username } = decoded
+        const me = await steamBridge.start()
+        // allows naming rooms (the server reserved that for some accounts)
+        appEvent("USER_EXTRA", 1)
         wsClient({
-            display_name: preferred_username,
-            token: token,
-            id: sub
+            display_name: me.name,
+            id: me.steamId
         })
     } catch (error) {
         console.error(error)
-        appEvent("TRY_LOGIN_FAILED", "")
+        appEvent("STEAM_LOGIN_FAILED", { reason: error.message })
     }
 })
 
-ipcMain.on("DELETE_USER", async (event, account) => {
-    try {
-        keytar.deletePassword("Noita Together", account)
-        appEvent("SAVED_USER", undefined)
-    } catch (error) {
-        console.error(error)
-        appEvent("DELETE_USER_FAILED", "")
-    }
+// The helper runs as Noita (app 881100), so pressing Stop on Noita in Steam, or
+// quitting Steam, ends it. Nothing works without it, so close the app too
+// instead of leaving a "Disconnected from Steam" dialog behind.
+steamBridge.on("exit", ({ code, signal }) => {
+    console.log(`[steam] helper stopped (code=${code} signal=${signal}), quitting`)
+    app.quit()
+})
+
+app.on("will-quit", () => {
+    // closing the bridge leaves any Steam lobby we're in
+    steamBridge.stop()
 })
 
 // Quit when all windows are closed.
@@ -198,32 +140,12 @@ if (!primaryInstance) {
     app.quit()
 } else {
     app.on("second-instance", (event, commandLine, workingDirectory) => {
-        /*
-        const cmdIndex = isDevelopment ? 3 : 2
-        
-        if (commandLine[cmdIndex]) {//noitatogether://?display_name=test&token=abc321&refresh=idk456&id=1111&e=0
-            let url = new URL(commandLine[cmdIndex])
-            let display_name = url.searchParams.get("display_name")
-            let token = url.searchParams.get("token")
-            let refreshToken = url.searchParams.get("refresh")
-            let id = url.searchParams.get("id")
-            let extra = url.searchParams.get("e")
-            if (rememberUser) {
-                keytar.setPassword("Noita Together", display_name, refreshToken)
-            }
-            appEvent("USER_EXTRA", extra)
-            wsClient({
-                display_name,
-                token,
-                id
-            })
-        }
         if (mainWindow) {
             if (mainWindow.isMinimized()) {
                 mainWindow.restore()
             }
             mainWindow.focus()
-        }*/
+        }
     })
 
     // This method will be called when Electron has finished
@@ -238,7 +160,6 @@ if (!primaryInstance) {
                 console.error("Vue Devtools failed to install:", e.toString())
             }
         }
-        loginserv.listen(25669)
         createWindow()
     })
 }

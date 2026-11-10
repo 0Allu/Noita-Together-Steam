@@ -50,8 +50,12 @@ exports.updateMod = async (gamePath) => {
     let error = false
     let coopReady = false
     let memesisReady = false
+    let pathMissing = false
     const coop = updaterSetup("noita_mod/core", gamePath)
     const memesis = updaterSetup("noita_mod/nemesis", gamePath)
+    // the app asks for the game folder and calls updateMod again
+    coop.on('gamepath_error', () => { pathMissing = true })
+    memesis.on('gamepath_error', () => { pathMissing = true })
     coop.on('download_error', () => { error = true })
     coop.on('install_error', () => { error = true })
     coop.on('run_finish', () => {
@@ -67,6 +71,9 @@ exports.updateMod = async (gamePath) => {
     const memesisstuff = await memesis.run()
     if (coopReady && memesisReady && !error) {
         appEvent("update_done", true)
+    } else if (!pathMissing) {
+        // let the user retry or carry on with the mod they already have
+        appEvent("update_done", false)
     }
     return true
 }

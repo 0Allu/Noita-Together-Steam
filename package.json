@@ -17,7 +17,8 @@
     "server-init-db": "yarn workspace nt-web-app init-db",
     "serverDev": "yarn workspace nt-web-app serveDev",
     "buildServer": "yarn workspace nt-web-app build",
-    "buildClient": "yarn workspace nt-app electron:build"
+    "buildClient": "yarn workspace nt-app electron:build",
+    "buildSteam": "yarn workspace nt-app build:steam"
   },
   "dependencies": {
     "@noita-together/nt-message": "1.0.1",

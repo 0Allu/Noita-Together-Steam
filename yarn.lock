@@ -11455,8 +11455,6 @@ __metadata:
     eslint-plugin-vue: ^6.2.2
     fs-extra: ^11.2.0
     got: ^11.8.6
-    jsonwebtoken: ^9.0.2
-    keytar: ^7.9.0
     uuid: ^9.0.1
     validator: ^13.12.0
     vue: ^2.7.16

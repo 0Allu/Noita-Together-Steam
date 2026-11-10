@@ -12,7 +12,8 @@
         "build": "vue-cli-service build",
         "lint": "vue-cli-service lint",
         "electron:build": "vue-cli-service electron:build",
-        "electron:serve": "vue-cli-service electron:serve"
+        "electron:serve": "vue-cli-service electron:serve",
+        "build:steam": "node scripts/build-steam-bridge.js"
     },
     "main": "background.js",
     "dependencies": {
@@ -22,8 +23,6 @@
         "electron-updater": "6.3.0",
         "fs-extra": "^11.2.0",
         "got": "^11.8.6",
-        "jsonwebtoken": "^9.0.2",
-        "keytar": "^7.9.0",
         "uuid": "^9.0.1",
         "validator": "^13.12.0",
         "vue": "^2.7.16",

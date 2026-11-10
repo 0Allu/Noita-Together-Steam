@@ -75,6 +75,20 @@ function FindGameFolder() {
 // Constants
 const AutoUpdateServers = ['https://raw.githubusercontent.com/Noita-Together/noita-together/'];
 
+// The Steam build ships its own copy of the mod (vue.config.js extraResources),
+// because the mod on GitHub doesn't have the Steam-only features (shared gold,
+// shared health, perk ban list). Returns "" when there is no bundled copy.
+function bundledModDir(branch) {
+    const name = branch.split('/').pop();
+    const roots = [];
+    if (process.resourcesPath) roots.push(path.join(process.resourcesPath, 'noita_mod'));
+    for (const root of roots) {
+        const dir = path.join(root, name);
+        if (fs.existsSync(path.join(dir, 'manifest.json'))) return dir;
+    }
+    return '';
+}
+
 // Implementation
 function forcedirSync(dir) {
     try {
@@ -95,6 +109,13 @@ class Updater extends EventEmitter {
 
         this.branch = branch;
         this.gamePath = gamePath || ""
+        // a bundled mod wins over GitHub, so official releases can't undo the Steam features
+        const local = bundledModDir(branch);
+        this.servers = local ? [local] : AutoUpdateServers;
+    }
+
+    isLocal(serverIndex) {
+        return !/^https?:/.test(this.servers[serverIndex]);
     }
 
     buildPath(relpath) {
@@ -102,13 +123,22 @@ class Updater extends EventEmitter {
         return p;
     }
     buildURL(serverIndex, relpath) {
-        return `${AutoUpdateServers[serverIndex]}main/${this.branch}/${relpath}`;
+        return `${this.servers[serverIndex]}main/${this.branch}/${relpath}`;
     }
     async downloadRaw(serverIndex, relpath) {
+        if (this.isLocal(serverIndex)) {
+            const file = path.join(this.servers[serverIndex], relpath);
+            // manifest paths are relative and must stay inside the bundled folder
+            if (path.relative(this.servers[serverIndex], file).startsWith('..')) throw new Error(`bad path ${relpath}`);
+            return fs.readFileSync(file);
+        }
         const url = this.buildURL(serverIndex, relpath)
         return await got(url).buffer();
     }
     async downloadJSON(serverIndex, relpath) {
+        if (this.isLocal(serverIndex)) {
+            return JSON.parse((await this.downloadRaw(serverIndex, relpath)).toString('utf-8'));
+        }
         const url = this.buildURL(serverIndex, relpath)
         return await got(url).json();
     }
@@ -155,7 +185,7 @@ class Updater extends EventEmitter {
         } catch (e) {
             this.emit('check_fail', serverIndex, e);
 
-            if (serverIndex + 1 < AutoUpdateServers.length) {
+            if (serverIndex + 1 < this.servers.length) {
                 return await this.check(serverIndex + 1);
             } else {
                 this.emit('check_fail_all');

@@ -2,7 +2,7 @@
     <transition name="modal">
         <div class="modal-mask">
             <div class="modal-wrapper">
-                <div class="modal-container">
+                <div class="modal-container" :class="size ? 'modal-' + size : ''">
                     <div class="modal-header">
                         <slot name="header"></slot>
                     </div>
@@ -23,6 +23,10 @@
 <script>
 export default {
     name: "vModal",
+    props: {
+        // "small" for short dialogs (password, confirmations)
+        size: { type: String, required: false }
+    }
 };
 </script>
 
@@ -45,6 +49,10 @@ export default {
 }
 
 .modal-container {
+    /* scroll instead of running under the title bar in small windows */
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+    box-sizing: border-box;
     max-width: 80%;
     margin: 0px auto;
     padding: 1.2em 1.3em;
@@ -54,6 +62,14 @@ export default {
     transition: all 0.3s ease;
     display: flex;
     flex-flow: column;
+}
+
+.modal-small {
+    width: 440px;
+}
+
+.modal-medium {
+    width: 540px;
 }
 
 .modal-header h1 {

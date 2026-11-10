@@ -361,6 +361,24 @@ function PopulateSpellList()
     end
 end
 
+-- Tell the app which perks this game has, for the room's perk ban list.
+function SendGamePerkList()
+    if (perk_list == nil) then
+        dofile_once("data/scripts/perks/perk_list.lua")
+    end
+    if (perk_list == nil or SendWsEvent == nil) then return end
+    local perks = {}
+    for _, perk in ipairs(perk_list) do
+        table.insert(perks, {
+            id = perk.id,
+            name = GameTextGetTranslatedOrNot(perk.ui_name or perk.id),
+            desc = GameTextGetTranslatedOrNot(perk.ui_description or ""),
+            pool = not perk.not_in_default_perk_pool
+        })
+    end
+    SendWsEvent({ event = "GamePerkList", payload = { perks = perks } })
+end
+
 function GetLastCheckPoint()
     local x = tonumber(MagicNumbersGetValue("DESIGN_PLAYER_START_POS_X"))
     local y = tonumber(MagicNumbersGetValue("DESIGN_PLAYER_START_POS_Y"))
@@ -484,6 +502,8 @@ function PlayerRespawn(entity_id, poly, weak)
                 end
             end
             ComponentSetValue2(damage_models, "hp", max_hp)
+            -- the refill after a death is ours alone, don't share it as healing
+            if SharedPoolsResync ~= nil then SharedPoolsResync() end
         end
         local effect_entity = LoadGameEffectEntityTo(player, "data/entities/misc/effect_protection_all.xml")
         local effect_comp = EntityGetFirstComponent(effect_entity, "GameEffectComponent")
@@ -532,7 +552,8 @@ function IsPlayerDead()
                 EndRun()
                 return
             end
-            if (GameHasFlagRun("NT_death_penalty_end")) then
+            -- shared health: the team has one health bar, so a death ends the run like "End run"
+            if (GameHasFlagRun("NT_death_penalty_end") or GameHasFlagRun("NT_death_penalty_shared_health")) then
                 EndRun()
                 ComponentSetValue2(damage_models, "kill_now", true)
             elseif(GameHasFlagRun("NT_death_penalty_weak_respawn")) then
@@ -556,7 +577,8 @@ function IsPlayerDead()
                 return
             end
             
-            if (GameHasFlagRun("NT_death_penalty_end")) then
+            -- shared health: the team has one health bar, so a death ends the run like "End run"
+            if (GameHasFlagRun("NT_death_penalty_end") or GameHasFlagRun("NT_death_penalty_shared_health")) then
                 ComponentSetValue2(damage_models, "kill_now", true)
                 EndRun()
             elseif(GameHasFlagRun("NT_death_penalty_weak_respawn")) then

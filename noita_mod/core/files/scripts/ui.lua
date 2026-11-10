@@ -958,7 +958,8 @@ if not initialized then
                 CleanRemovedBankItems(BankItems)
             end
             draw_item_bank()
-            if(GameHasFlagRun("NT_send_gold")) then
+            -- with Shared Gold everyone already has the same wallet
+            if(GameHasFlagRun("NT_send_gold") and not GameHasFlagRun("NT_shared_gold")) then
                 draw_gold_bank()
             end
 

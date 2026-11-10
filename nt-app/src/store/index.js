@@ -22,6 +22,16 @@ const firstOfType = (type, ...vs) => (vs || []).find((v) => typeof v === type)
 /** @typedef {{ type: 'enum', value: string, choices: string[] }} EnumFlag */
 /** @typedef {BooleanFlag|StringFlag|NumberFlag|EnumFlag} VueFlag */
 
+const PERK_LIST_KEY = "nt_perk_list"
+function loadPerkList() {
+    try {
+        const list = JSON.parse(localStorage.getItem(PERK_LIST_KEY) || "[]")
+        return Array.isArray(list) ? list : []
+    } catch (e) {
+        return []
+    }
+}
+
 export const gamemodes = {
     0: "Co-op",
     1: "Race",
@@ -37,7 +47,8 @@ export const flagInfo = {
         "NT_sync_perks":                  { name: "Share all perks", tooltip: "When grabbing perks the whole team will also get them." },
         "NT_team_perks":                  { name: "Team Perks", tooltip: "When grabbing certain perks (not all) the whole team will also get them." },
         "NT_alt_heartache":               { name: "Change Heartache", tooltip: "Change Heartache to affect HP instead of Max HP."},
-        "NT_ban_perks":                   { name: "Ban Glass Cannon", tooltip: "Remove glass cannon from perk pool (Gamble is safe). Recommended for large lobbies when using Respawn Penalty."},
+        "NT_banned_perks":                { name: "Banned Perks", tooltip: "Banned perks never show up in holy mountains (Gamble is safe), and anyone who already has one loses it. Banning Glass Cannon is recommended for large lobbies when using Respawn Penalty."},
+        "NT_shared_gold":                 { name: "Shared Gold", tooltip: "One wallet for the whole team: gold someone picks up or spends changes everyone's gold. Send Gold is turned off, since there's nothing to send." },
         "NT_sync_steve":                  { name: "Sync Steve", tooltip: "Angers the gods for everyone." },
         "NT_sync_hearts":                 { name: "Sync Hearts", tooltip: "When someone picks up a heart everyone else gets it too." },
         "NT_sync_orbs":                   { name: "Sync Orbs", tooltip: "When someone picks up an orb everyone else gets it too." },
@@ -49,16 +60,19 @@ export const flagInfo = {
         "NT_send_gold":                   { name: "Send Gold", tooltip: "Allow players to deposit/take gold." },
         "NT_send_items":                  { name: "Send Items", tooltip: "Allow players to deposit/take items." },
         "NT_world_randomize_loot":        { name: "Randomize loot", tooltip: "Only applies when playing on the same seed, makes it so everyone gets different loot." },
-        "NT_sync_world_seed":             { name: "Sync Seed", tooltip: "All players play in the same world seed (requires everyone to start a new game) 0 means random seed." },
+        "NT_random_shared_seed":          { name: "Shared random seed", tooltip: "Everyone plays the same world, with a new random seed picked for every run. Turn off to choose the seed yourself." },
+        "NT_sync_world_seed":             { name: "Sync Seed", tooltip: "All players play in the same world seed (requires everyone to start a new game). 0 means everyone gets their own random world." },
         "NT_death_penalty": {
             "end":           { name: "End run", tooltip: "Run ends for all players when someone dies." },
             "weak_respawn":  { name: "Respawn Penalty", tooltip: "Player respawns and everyone takes a % drop on their max hp, once it goes below certain threshold on the weakest player the run ends for everyone." },
             "full_respawn":  { name: "Respawn", tooltip: "Player will respawn on their last checkpoint and no penalties." },
+            "shared_health": { name: "Shared health (ends run)", tooltip: "The team shares one health bar: when anyone takes damage or heals, everyone does. Max HP is shared too, so hearts and max HP perks count for everyone (Sync Hearts is turned off). When anyone dies, the run ends for everyone." },
         },
         "NT_ondeath_kick":                { name: "Kick on death", tooltip: "Kicks whoever dies, more customisable soon™. "},
     },
     2: {
         "NT_NEMESIS_ban_ambrosia":        { name: "Ban Ambrosia", tooltip: "will shift ambrosia away." },
+        "NT_banned_perks":                { name: "Banned Perks", tooltip: "Banned perks never show up in holy mountains (Gamble is safe), and anyone who already has one loses it. Invisibility is handled by \"Ban Invisibility\"." },
         "NT_NEMESIS_ban_invis":           { name: "Ban Invisibility", tooltip: "will shift invisibility away and remove the perk." },
         "NT_NEMESIS_nemesis_abilities":   { name: "Nemesis abilities", tooltip: "Abilities will appear in each holy mountain with an NP cost." },
         "NT_sync_steve":                  { name: "Sync Steve", tooltip: "Angers the gods for everyone." },
@@ -66,7 +80,8 @@ export const flagInfo = {
         "NT_sync_orbs_no_curse":          { name: "Friendly PW Orbs", tooltip: "Parallel World orbs won't send cursed hearts to other players. No effect without \"Sync Orbs\"" },
         "NT_sync_orb_count":              { name: "Sync Orb Until", tooltip: "Everyone gets an orb until this number is hit. If 0, then there is no limit" },
         "NT_world_randomize_loot":        { name: "Randomize loot", tooltip: "Only applies when playing on the same seed, makes it so everyone gets different loot." },
-        "NT_sync_world_seed":             { name: "Sync Seed", tooltip: "All players play in the same world seed (requires everyone to start a new game) 0 means random seed." },
+        "NT_random_shared_seed":          { name: "Shared random seed", tooltip: "Everyone plays the same world, with a new random seed picked for every run. Turn off to choose the seed yourself." },
+        "NT_sync_world_seed":             { name: "Sync Seed", tooltip: "All players play in the same world seed (requires everyone to start a new game). 0 means everyone gets their own random world." },
         "NT_death_penalty": {
             "weak_respawn":  { name: "Last noita standing.", tooltip: "Run ends when there's only one player left." },
         },
@@ -81,9 +96,10 @@ export const defaultFlags = {
         { id: "NT_sync_perks",                 type: "boolean", value: false, },
         { id: "NT_team_perks",                 type: "boolean", value: true,  },
         { id: "NT_alt_heartache",              type: "boolean", value: false, },
-        { id: "NT_ban_perks",                  type: "boolean", value: false,  },
+        { id: "NT_banned_perks",               type: "string",  value: "",    }, // comma separated perk ids
         { id: "NT_sync_steve",                 type: "boolean", value: true,  },
         { id: "NT_sync_hearts",                type: "boolean", value: true,  },
+        { id: "NT_shared_gold",                type: "boolean", value: false, },
         { id: "NT_sync_orbs",                  type: "boolean", value: true,  },
         { id: "NT_sync_orbs_no_curse",         type: "boolean", value: false, requires: [{"NT_sync_orbs": true}] }, //TODO actually check requires :)
         { id: "NT_sync_orb_count",             type: "number" , value: 0,     },
@@ -93,8 +109,9 @@ export const defaultFlags = {
         { id: "NT_send_gold",                  type: "boolean", value: true,  },
         { id: "NT_send_items",                 type: "boolean", value: true,  },
         { id: "NT_world_randomize_loot",       type: "boolean", value: true,  },
+        { id: "NT_random_shared_seed",         type: "boolean", value: true,  },
         { id: "NT_sync_world_seed",            type: "number" , value: 0,     },
-        { id: "NT_death_penalty",              type: "enum",    value: 'end', choices: ['end', 'weak_respawn', 'full_respawn'], },
+        { id: "NT_death_penalty",              type: "enum",    value: 'end', choices: ['end', 'weak_respawn', 'full_respawn', 'shared_health'], },
         { id: "NT_ondeath_kick",               type: "boolean", value: false, },
     ],
     /** @type {VueFlag[]} */
@@ -102,11 +119,13 @@ export const defaultFlags = {
         { id: "NT_NEMESIS_ban_ambrosia",       type: "boolean", value: true,  },
         { id: "NT_NEMESIS_ban_invis",          type: "boolean", value: true,  },
         { id: "NT_NEMESIS_nemesis_abilities",  type: "boolean", value: true,  },
+        { id: "NT_banned_perks",               type: "string",  value: "",    }, // comma separated perk ids
         { id: "NT_sync_steve",                 type: "boolean", value: false, },
         { id: "NT_sync_orbs",                  type: "boolean", value: false, },
         { id: "NT_sync_orbs_no_curse",         type: "boolean", value: false, requires: [{"NT_sync_orbs": true}] }, //TODO actually check requires :)
         { id: "NT_sync_orb_count",             type: "number" , value: 0,     },
         { id: "NT_world_randomize_loot",       type: "boolean", value: true,  },
+        { id: "NT_random_shared_seed",         type: "boolean", value: false, },
         { id: "NT_sync_world_seed",            type: "number" , value: 0,     },
         { id: "NT_death_penalty",              type: "enum", value: 'weak_respawn', choices: ['weak_respawn'], },
         { id: "NT_ondeath_kick",               type: "boolean", value: true,  }
@@ -144,14 +163,15 @@ export const updateFlagsFromProto = (gamemode, current, update) => {
                 vueFlag.value = firstOfType("string", valid, prev.value)
                 break
             case "string":
-                vueFlag.value = firstOfType("string", found.strVal, prev.value)
+                vueFlag.value = firstOfType("string", (found || {}).strVal, prev.value)
                 break
             default: // numeric types
+                // a missing flag keeps its previous value
                 vueFlag.value = firstOfType(
                     "number",
-                    found.uIntVal,
-                    found.intVal,
-                    found.floatVal,
+                    (found || {}).uIntVal,
+                    (found || {}).intVal,
+                    (found || {}).floatVal,
                     prev.value
                 )
                 break
@@ -248,8 +268,14 @@ const ipcPlugin = (ipc) => {
             store.commit("setUserExtra", data)
         })
 
-        ipc.on("SAVED_USER", (event, data) => {
-            store.commit("setSavedUserName", data)
+        ipc.on("STEAM_LOBBY", (event, data) => {
+            store.commit("setLobbyCode", data ? data.code : "")
+        })
+
+        // accepted a Steam invite / "Join game" from the Steam friends list
+        ipc.on("STEAM_JOIN_REQUESTED", (event, data) => {
+            if (store.state.room.id || store.state.loading) return
+            store.dispatch("joinRoom", { id: data.code })
         })
         /*
         ipc.on("DEBUG_EVT", (event, data) => {
@@ -268,14 +294,36 @@ const ipcPlugin = (ipc) => {
 
         ipc.on("CONNECTION_LOST", (event, data) => {
             store.dispatch("errDialog", {
-                title: "Disconnected from server",
-                body: `Received status code of ${data.code} when disconnected (${data.reason})`,
+                title: "Disconnected from Steam",
+                body: `Lost connection: ${data.reason}`,
                 canClose: false
             })
         })
 
         ipc.on("sRoomUpdated", (event, data) => {
             store.commit("roomUpdated", data)
+        })
+
+        // the mod reports the game's perks when it connects; used by the perk ban picker
+        // the mod connected to / disconnected from the app
+        ipc.on("noita_connection", (event, connected) => {
+            store.commit("setNoitaConnected", !!connected)
+        })
+
+        // the "Start Noita" button (src/launchNoita.js)
+        ipc.on("noita_launch", (event, state) => {
+            store.commit("setNoitaLaunched", state.status === "running")
+            if (state.status === "error") {
+                store.dispatch("errDialog", {
+                    title: "Couldn't start Noita",
+                    body: state.message,
+                    canClose: true
+                })
+            }
+        })
+
+        ipc.on("GamePerkList", (event, perks) => {
+            store.commit("setPerkList", perks)
         })
 
         ipc.on("sRoomFlagsUpdated", (event, data) => {
@@ -370,9 +418,15 @@ export default new Vuex.Store({
             extra: 0,
             color: ""
         },
-        savedUser: false,
-        savedUserName: "",
         lobbies: [],
+        // [{id, name, desc, pool}] from the mod, remembered between sessions
+        perkList: loadPerkList(),
+        // short Steam lobby code others can use to join the current room
+        lobbyCode: "",
+        // the mod is connected to the app
+        noitaConnected: false,
+        // we started noita.exe and it hasn't exited
+        noitaLaunched: false,
         roomTab: "0",
         room: {
             id: "",
@@ -449,9 +503,14 @@ export default new Vuex.Store({
         }
     },
     mutations: {
-        setSavedUserName: (state, value) => {
-            state.savedUser = !!value
-            state.savedUserName = value
+        setNoitaConnected: (state, value) => {
+            state.noitaConnected = value
+        },
+        setNoitaLaunched: (state, value) => {
+            state.noitaLaunched = value
+        },
+        setLobbyCode: (state, value) => {
+            state.lobbyCode = value || ""
         },
         setLoading: (state, value) => {
             state.loading = value
@@ -496,6 +555,24 @@ export default new Vuex.Store({
             state.room = payload
             for (const user of state.room.users) {
                 user.color = randomColor(user.name)
+            }
+        },
+        setPerkList: (state, perks) => {
+            if (!Array.isArray(perks)) return
+            const clean = perks
+                .filter((p) => p && typeof p.id === "string" && p.id)
+                .map((p) => ({
+                    id: p.id,
+                    name: typeof p.name === "string" && p.name ? p.name : p.id,
+                    desc: typeof p.desc === "string" ? p.desc : "",
+                    pool: p.pool !== false
+                }))
+            if (!clean.length) return
+            state.perkList = clean
+            try {
+                localStorage.setItem(PERK_LIST_KEY, JSON.stringify(clean))
+            } catch (e) {
+                // not worth bothering anyone about
             }
         },
         roomUpdated: (state, payload) => {
@@ -622,26 +699,16 @@ export default new Vuex.Store({
         updateTab: async ({ commit }, payload) => {
             commit("setTab", payload)
         },
-        continueSavedUser: ({ state, commit, dispatch }) => {
+        steamLogin: ({ commit, dispatch }) => {
             commit("setLoading", true)
-            ipcRenderer.send("TRY_LOGIN", state.savedUserName)
-            ipcRenderer.once("TRY_LOGIN_FAILED", () => {
+            ipcRenderer.send("STEAM_LOGIN")
+            ipcRenderer.once("STEAM_LOGIN_FAILED", (event, data) => {
                 dispatch("errDialog", {
-                    title: "Failed to login",
-                    body: "Login manually with the remember me checkbox checked to refresh your login info.",
+                    title: "Couldn't connect to Steam",
+                    body: data.reason,
                     canClose: true
                 })
                 commit("setLoading", false)
-            })
-        },
-        deleteSavedUser: ({ state, dispatch }) => {
-            ipcRenderer.send("DELETE_USER", state.savedUserName)
-            ipcRenderer.once("DELETE_USER_FAILED", () => {
-                dispatch("errDialog", {
-                    title: "Failed to delete saved user",
-                    body: "Restart the app and try again.",
-                    canClose: true
-                })
             })
         },
         errDialog: ({ commit }, payload) => {
@@ -668,7 +735,9 @@ export default new Vuex.Store({
         },
         createRoom: async ({ commit, dispatch }, payload) => {
             commit("setLoading", true)
-            ipcRenderer.send("CLIENT_MESSAGE", { key: "cRoomCreate", payload })
+            const { visibility, ...room } = payload
+            ipcRenderer.send("STEAM_LOBBY_TYPE", visibility || "public")
+            ipcRenderer.send("CLIENT_MESSAGE", { key: "cRoomCreate", payload: room })
             ipcRenderer.once("sRoomCreated", (event, data) => {
                 commit("setDefaultFlags", data.gamemode)
                 commit("setRoom", data)

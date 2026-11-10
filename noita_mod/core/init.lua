@@ -12,6 +12,7 @@ if not async then
 end 
 dofile_once("mods/noita-together/files/scripts/utils.lua")
 dofile_once("mods/noita-together/files/scripts/ui.lua")
+dofile_once("mods/noita-together/files/scripts/shared_pools.lua")
 
 -----------------
 -- lua appends --
@@ -184,6 +185,9 @@ function OnWorldPostUpdate()
 
             --BOSS FIGHT CHECK
             CoopBossFightTick()
+
+            --shared gold / shared health
+            SharedPoolsTick()
         end
         local player = GetPlayer()
         local frame = GameGetFrameNum()

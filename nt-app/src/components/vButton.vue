@@ -65,8 +65,36 @@ export default {
     transform: scale(0.9);
 }
 
-.btn:disabled {
+/* the main action on a screen */
+.btn-primary {
+    background-color: #3f7a3a;
+}
+
+.btn-primary:hover {
+    background-color: #4c9146;
+}
+
+/* leave / delete */
+.btn-danger {
+    background-color: #8a3232;
+}
+
+.btn-danger:hover {
+    background-color: #a33c3c;
+}
+
+/* same height as a .field input, for buttons attached to one */
+.btn-field {
+    font-size: 1em;
+    padding: 0 0.9em;
+    height: 34px;
+}
+
+.btn:disabled,
+.btn:disabled:hover {
     cursor: not-allowed;
-    background-color: #a5a5a5;
+    background-color: #4a4a4a;
+    opacity: 0.55;
+    transform: none;
 }
 </style>

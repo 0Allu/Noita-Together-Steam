@@ -1,18 +1,22 @@
--- Returns a table of all possible banned perk_list.id string values
-function AllPotentialBannedPerksTable()
-    local banned_perks = {
-        "GLASS_CANNON"
-    }
-    return banned_perks
-end
+-- Perks with their own "banned" sprite in files/items_gfx/banned_perks/<id lowercase>.png.
+-- Every other banned perk shows its normal icon with a red cross over it.
+BANNED_PERK_CUSTOM_SPRITES = {
+    GLASS_CANNON = true
+}
 
--- Returns a table of banned perk_list.id string values
--- Separated to allow for potential selections or sets changes via app events in future
+-- Returns a table of banned perk_list.id string values.
+-- The room host picks them in the app; events.lua UpdateFlags stores them in the
+-- NT_banned_perks global as a comma separated list (globals are shared by every lua context).
 function BannedPerksTable()
-    -- Table of perk_list.id strings to be banned.
-    local banned_perks = {
-        "GLASS_CANNON"
-    }
+    local banned_perks = {}
+    local list = GlobalsGetValue("NT_banned_perks", "")
+    for perk_id in string.gmatch(list, "[^,]+") do
+        table.insert(banned_perks, perk_id)
+    end
+    -- rooms from older app versions only had "Ban Glass Cannon"
+    if #banned_perks == 0 then
+        table.insert(banned_perks, "GLASS_CANNON")
+    end
     return banned_perks
 end
 
@@ -29,14 +33,10 @@ function IsBannedPerkId(perk_id)
     return false
 end
 
--- Returns is a perk_id could be banned
+-- Returns is a perk_id could be banned. Any perk can be put on the ban list, and the list can
+-- change mid-run, so every perk in the world gets the check script.
 function ISBannablePerkId(perk_id)
-    for _, _perk_id in ipairs(AllPotentialBannedPerksTable()) do
-        if _perk_id == perk_id then
-            return true
-        end
-    end
-    return false
+    return perk_id ~= nil and perk_id ~= ""
 end
 
 -- Returns all repeatedly utilized VariableStorageComponent values to avoid multiple iterations across components

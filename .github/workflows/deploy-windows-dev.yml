@@ -28,6 +28,8 @@ jobs:
         with:
           node-version: 16
       - run: yarn install
+      # Steam lobby/P2P helper (Rust is preinstalled on windows-latest)
+      - run: yarn workspace nt-app build:steam
       - run: yarn workspace nt-app electron:build --publish never
       - run: ls ${{ github.workspace }}/nt-app/dist_electron/
       - run: |

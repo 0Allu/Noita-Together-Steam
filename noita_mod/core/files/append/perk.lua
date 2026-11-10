@@ -47,9 +47,15 @@ function perk_spawn(x, y, perk_id, dont_remove_other_perks_)
     local perk_image_file_path
     local is_banned_perk = IsBannedPerkId(perk_id)
     local is_bannable_perk = ISBannablePerkId(perk_id)
+    local banned_overlay = false
     if is_banned_perk then
         perk_xml_path = "mods/noita-together/files/entities/perks/banned_perk.xml"
-        perk_image_file_path = "mods/noita-together/files/items_gfx/banned_perks/" .. perk_id .. ".png"
+        if BANNED_PERK_CUSTOM_SPRITES[perk_id] then
+            perk_image_file_path = "mods/noita-together/files/items_gfx/banned_perks/" .. string.lower(perk_id) .. ".png"
+        else
+            perk_image_file_path = perk_data.perk_icon
+            banned_overlay = true
+        end
     else
         perk_xml_path = "data/entities/items/pickup/perk.xml"
         perk_image_file_path = perk_data.perk_icon
@@ -71,6 +77,19 @@ function perk_spawn(x, y, perk_id, dont_remove_other_perks_)
             update_transform = "1",
             update_transform_rotation = "0",
         })
+
+    if banned_overlay then
+        -- red cross drawn in front of the normal perk icon
+        EntityAddComponent(entity_id, "SpriteComponent",
+            {
+                image_file = "mods/noita-together/files/items_gfx/banned_perks/banned_overlay.png",
+                offset_x = "8",
+                offset_y = "8",
+                z_index = "-0.01",
+                update_transform = "1",
+                update_transform_rotation = "0",
+            })
+    end
 
     EntityAddComponent(entity_id, "UIInfoComponent",
         {

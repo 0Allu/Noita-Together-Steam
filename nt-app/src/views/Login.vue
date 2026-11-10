@@ -4,83 +4,50 @@
       <div class="login-ui-logo">
         <vAppLogo />
       </div>
-      <div class="login-button" v-if="savedUser">
-        <div class="twitch-login" @click="ContinueSavedUser">
-          <div class="twitch-logo">
-            <i class="fab fa-twitch"></i>
-          </div>
-          <span class="twitch-login-text">
-            Continue as {{ savedUserName }}
-          </span>
-        </div>
-        <div title="Log out" class="delete-saved-user" @click="DeleteSavedUser">
-          <i class="fas fa-sign-out-alt"></i>
-        </div>
-      </div>
       <div class="login-button">
-        <div class="twitch-login" @click="OpenLoginPage">
-          <div class="twitch-logo">
-            <i class="fas fa-spinner fa-spin fa-pulse" v-if="clicked"></i>
-            <i class="fab fa-twitch" v-else></i>
+        <div class="steam-login" @click="SteamLogin">
+          <div class="steam-logo">
+            <i class="fas fa-spinner fa-spin fa-pulse" v-if="loading"></i>
+            <i class="fab fa-steam" v-else></i>
           </div>
-          <span class="twitch-login-text">
-            Login with Twitch.tv
+          <span class="steam-login-text">
+            {{ loading ? "Connecting to Steam..." : "Connect with Steam" }}
           </span>
         </div>
       </div>
-      <div class="remember-login">
-        <input type="checkbox" id="remember-user" name="remember-user" v-model="remember" />
-        <label for="remember-user">Remember me</label>
-      </div>
+      <p class="login-hint">
+        Rooms are hosted over Steam. Keep Steam running; you need to own Noita on this account.
+      </p>
     </div>
   </div>
 </template>
 
 <script>
-import { shell, ipcRenderer } from "electron"
 import vAppLogo from "../components/vAppLogo.vue"
 export default {
   components: { vAppLogo },
-  data() {
-    return {
-      loginUrl: process.env.VUE_APP_NT_LOGIN_URL ? process.env.VUE_APP_NT_LOGIN_URL : `${process.env.VUE_APP_HOSTNAME}/auth/login`,
-      remember: false,
-      clicked: false
-    }
-  },
   beforeCreate() {
     const unsub = this.$store.subscribe((mutation, state) => {
-      if (mutation.type == "setUser" && state.user.id > 0) {
+      if (mutation.type == "setUser" && state.user.id) {
         unsub()
-        this.clicked = false
         this.$router.replace({ path: "/lobby" })
         this.$store.commit("setLoading", false)
       }
     })
   },
+  mounted() {
+    // nothing to type in: try straight away, the button is there for retries
+    this.SteamLogin()
+  },
   computed: {
-    savedUser() {
-      return this.$store.state.savedUser
-    },
-    savedUserName() {
-      return this.$store.state.savedUserName
+    loading() {
+      return this.$store.state.loading
     }
   },
   methods: {
-    OpenLoginPage() {
-      this.clicked = true
-      shell.openExternal(this.loginUrl)
-    },
-    ContinueSavedUser() {
-      this.$store.dispatch("continueSavedUser")
-    },
-    DeleteSavedUser() {
-      this.$store.dispatch("deleteSavedUser")
-    }
-  },
-  watch: {
-    remember(_, newVal) {
-      ipcRenderer.send("remember_user", !newVal)
+    SteamLogin() {
+      if (this.loading) return
+      this.$store.dispatch("steamLogin")
     }
   }
 }
@@ -107,54 +74,34 @@ export default {
   margin-bottom: 2rem;
 }
 
-.twitch-login {
+.steam-login {
   display: flex;
   min-width: 300px;
-  background-color: #6441a5;
+  background-color: #1b2838;
   margin-top: auto;
   align-self: center;
   cursor: pointer;
 }
 
-.twitch-login:hover {
-  background-color: #503484;
+.steam-login:hover {
+  background-color: #2a475e;
 }
 
-.twitch-logo {
+.steam-logo {
   padding: 1rem;
-  background-color: #503484;
+  background-color: #171a21;
 }
 
-.twitch-login-text {
+.steam-login-text {
   margin: auto;
   align-self: center;
 }
 
-.saved-user {
-  display: flex;
-}
-
-.delete-saved-user {
-  padding: 1rem;
-  background-color: #843434;
-}
-
-.delete-saved-user:hover {
-  padding: 1rem;
-  background-color: #9e3434;
-}
-
-.remember-login {
+.login-hint {
+  max-width: 300px;
+  margin: 0 auto;
   text-align: center;
-}
-
-.remember-login>label {
-  margin: 0.5rem;
-}
-
-input[type="checkbox"] {
-  vertical-align: middle;
-  position: relative;
-  bottom: 0.1rem;
+  font-size: 0.85rem;
+  opacity: 0.7;
 }
 </style>

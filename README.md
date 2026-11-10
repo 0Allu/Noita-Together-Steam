@@ -2,6 +2,36 @@
 
 Noita Together hasn't had an active maintainer for a long time, so we've decided to shut off the servers and retire the project.
 
+## Playing over Steam
+
+This version no longer needs the retired noitatogether.com servers. Rooms are
+Steam lobbies, and players connect to each other with Steam's P2P networking.
+The networking code is taken from
+[Noita Entangled Worlds](https://github.com/IntQuant/noita_entangled_worlds)
+(see [nt-steam-bridge](/nt-steam-bridge)).
+
+- Keep Steam running and sign in with an account that owns Noita. The app
+  signs you in with Steam automatically; there's no Twitch login.
+- Whoever creates a room hosts it. Their app now does everything the lobby
+  server did (passwords, kicks and bans, ready checks, the item bank, run
+  stats), and everyone else connects to them. If the host quits, the room
+  closes.
+- Rooms can be listed publicly or be "invite code only". The code is shown at
+  the top of the room; others paste it into the invite code field in the lobby.
+  While the app is open, accepting a Steam invite to the host's lobby should
+  join the room too (not tested yet).
+- Run stats are posted in chat when the host ends the run, since there's no
+  stats website anymore.
+- While the app is open, Steam shows you as playing Noita: it uses Noita's
+  Steam app id, like Entangled Worlds.
+- Everyone needs a compatible version of the app. Rooms from an incompatible
+  version aren't shown.
+
+Building the app now also needs a [Rust toolchain](https://rustup.rs) for
+the Steam helper: run `yarn buildSteam` once before `yarn client` or
+`yarn buildClient`. The auth server, lobby server and `.env` setup described
+below aren't needed for the Steam version.
+
 
 # Noita Together
 

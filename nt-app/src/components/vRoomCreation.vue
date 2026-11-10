@@ -1,26 +1,76 @@
 <template>
-    <vModal>
-        <h1 slot="header">Create Room</h1>
-        <template slot="body">
-            <select class="slot-selector" v-model="toCreate.gamemode">
-                <option>Co-op</option>
-                <option>Nemesis PROTOTYPE</option>
-            </select>
-            <select class="slot-selector" v-model="toCreate.maxUsers">
-                <option v-for="(slot, index) in slots" :key="index">{{ slot }} slots</option>
-            </select>
-            <vInput
-                v-if="userExtra > 0"
-                v-model="toCreate.name"
-                label="room name"
-                :validate="validateLength"
-                @valid="isValid"
-            />
-            <vInput v-model="toCreate.password" label="room password" />
-        </template>
-        <div slot="footer" class="centered">
-            <vButton @click="createRoom" :disabled="!canCreate">Create</vButton>
+    <vModal size="medium">
+        <h1 slot="header" class="dialog-title">
+            <i class="fas fa-plus-square dialog-icon"></i>
+            Create Room
+        </h1>
+        <form slot="body" class="form" @submit.prevent="createRoom">
+            <div class="form-field">
+                <label class="form-label" for="room-name">Room name</label>
+                <label class="field" :class="{ invalid: nameError }">
+                    <i class="fas fa-home"></i>
+                    <input id="room-name" ref="name" v-model="name" maxlength="32" spellcheck="false" />
+                </label>
+                <span v-if="nameError" class="form-error">{{ nameError }}</span>
+            </div>
+
+            <div class="form-row">
+                <div class="form-field">
+                    <label class="form-label" for="room-mode">Game mode</label>
+                    <select id="room-mode" class="slot-selector" v-model.number="gamemode">
+                        <option :value="0">Co-op</option>
+                        <option :value="2">Nemesis (prototype)</option>
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label class="form-label" for="room-slots">Max players</label>
+                    <vPlayerLimit input-id="room-slots" v-model="maxUsers" />
+                    <span v-if="maxUsersError" class="form-error">{{ maxUsersError }}</span>
+                </div>
+            </div>
+
+            <div class="form-field">
+                <span class="form-label">Who can find it</span>
+                <div class="choice-group">
+                    <label class="choice" :class="{ selected: visibility === 'public' }">
+                        <input type="radio" value="public" v-model="visibility" />
+                        <i class="fas fa-globe"></i>
+                        <span>
+                            <span class="choice-title">Public</span>
+                            <span class="choice-desc">Listed in everyone's room list</span>
+                        </span>
+                    </label>
+                    <label class="choice" :class="{ selected: visibility === 'private' }">
+                        <input type="radio" value="private" v-model="visibility" />
+                        <i class="fas fa-key"></i>
+                        <span>
+                            <span class="choice-title">Invite only</span>
+                            <span class="choice-desc">Hidden; join with the invite code</span>
+                        </span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-field">
+                <label class="form-label" for="room-password">Password <span class="optional">(optional)</span></label>
+                <label class="field" :class="{ invalid: passwordError }">
+                    <i class="fas fa-lock"></i>
+                    <input
+                        id="room-password"
+                        v-model="password"
+                        maxlength="50"
+                        placeholder="No password"
+                        spellcheck="false"
+                    />
+                </label>
+                <span v-if="passwordError" class="form-error">{{ passwordError }}</span>
+            </div>
+            <!-- lets Enter submit the form -->
+            <button type="submit" hidden></button>
+        </form>
+        <div slot="footer" class="dialog-actions">
             <vButton @click="close">Cancel</vButton>
+            <vButton class="btn-primary" @click="createRoom" :disabled="!canCreate">Create</vButton>
         </div>
     </vModal>
 </template>
@@ -28,64 +78,63 @@
 <script>
 import vModal from "../components/vModal.vue";
 import vButton from "../components/vButton.vue";
-import vInput from "../components/vInput.vue";
+import vPlayerLimit, { playerLimitError } from "../components/vPlayerLimit.vue";
+
+// the room host rejects anything else (see steam/hostRoom.js)
+const PRINTABLE_ASCII = /^[\x20-\x7E]*$/;
+
 export default {
     name: "vRoomCreation",
     components: {
         vButton,
         vModal,
-        vInput,
+        vPlayerLimit,
     },
     data() {
         return {
-            canCreate: true,
-            toCreate: {
-                name: `${this.$store.state.user.name}'s Room`,
-                gamemode: "Co-op",
-                password: "",
-                maxUsers: "5 slots",
-            },
+            name: `${this.$store.state.user.name}'s Room`,
+            gamemode: 0,
+            maxUsers: 5,
+            visibility: "public",
+            password: "",
         };
     },
+    mounted() {
+        this.$refs.name.focus();
+        this.$refs.name.select();
+    },
     computed: {
-        userExtra() {
-            return this.$store.getters.userExtra;
+        maxUsersError() {
+            return playerLimitError(this.maxUsers);
         },
-        slots() {
-            const slots = [5, 10, 15, 20, 25, 30]
-            if (this.userExtra > 1) {
-                return slots.concat([45, 60, 75, 90, 120])
-            }
-            return slots
-        }
+        nameError() {
+            const name = this.name.trim();
+            if (!name) return "Give the room a name.";
+            if (name.length > 32) return "Keep it under 32 characters.";
+            if (!PRINTABLE_ASCII.test(name)) return "Use plain letters, numbers and symbols (no emoji or accents).";
+            return "";
+        },
+        passwordError() {
+            if (!PRINTABLE_ASCII.test(this.password)) return "Use plain letters, numbers and symbols (no emoji or accents).";
+            return "";
+        },
+        canCreate() {
+            return !this.nameError && !this.passwordError && !this.maxUsersError;
+        },
     },
     methods: {
         createRoom() {
-            const payload = { ...this.toCreate };
-            let maxUsers = payload.maxUsers.split(" ")[0];
-            payload.maxUsers = Number(maxUsers);
-            if (!payload.name) { payload.name = "" }
-            if (payload.gamemode == "Co-op") { payload.gamemode = 0 }
-            if (payload.gamemode == "Nemesis PROTOTYPE") { payload.gamemode = 2 }
-            this.$emit("createRoom", payload);
+            if (!this.canCreate) return;
+            this.$emit("createRoom", {
+                name: this.name.trim(),
+                gamemode: this.gamemode,
+                password: this.password,
+                maxUsers: this.maxUsers,
+                visibility: this.visibility,
+            });
         },
         close() {
-            this.toCreate = {
-                name: "",
-                gamemode: 0,
-                password: "",
-                maxUsers: "5 slots",
-            };
             this.$emit("close");
-        },
-        validateLength(e) {
-            if (e.length && e.length > 32) {
-                return "length should be less than 32 characters.";
-            }
-            return true;
-        },
-        isValid(val) {
-            this.canCreate = val;
         },
     },
 };

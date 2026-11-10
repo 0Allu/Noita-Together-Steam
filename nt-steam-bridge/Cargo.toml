@@ -1,0 +1,19 @@
+[package]
+name = "nt-steam-bridge"
+description = "Steam lobby + P2P transport for Noita Together (networking ported from Noita Entangled Worlds)."
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+steamworks = "0.11.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+base64 = "0.22"
+crossbeam-channel = "0.5"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std", "env-filter"] }
+
+[profile.release]
+lto = true
+strip = true

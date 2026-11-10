@@ -1,13 +1,18 @@
 <template>
-    <vModal>
-        <h1 slot="header">Leave Room?</h1>
+    <vModal size="small">
+        <h1 slot="header" class="dialog-title">
+            <i class="fas fa-door-open dialog-icon" :class="{ danger: isHost }"></i>
+            {{ isHost ? "Close the room?" : "Leave the room?" }}
+        </h1>
         <template slot="body">
-            <p v-if="isHost">The room will be deleted, and the item bank will be lost.</p>
-            <p v-else>Are you sure you want to leave the room?</p>
+            <p class="dialog-text" v-if="isHost">
+                You're the host, so leaving closes the room for everyone and the item bank is lost.
+            </p>
+            <p class="dialog-text" v-else>You can rejoin later if the room is still open.</p>
         </template>
-        <div slot="footer" class="centered">
-            <vButton @click="leaveRoom">Leave</vButton>
-            <vButton @click="close">Cancel</vButton>
+        <div slot="footer" class="dialog-actions">
+            <vButton @click="close">Stay</vButton>
+            <vButton class="btn-danger" @click="leaveRoom">{{ isHost ? "Close room" : "Leave" }}</vButton>
         </div>
     </vModal>
 </template>
@@ -16,7 +21,7 @@
 import vModal from "../components/vModal.vue";
 import vButton from "../components/vButton.vue";
 export default {
-    name: "vRoomCreation",
+    name: "vLeaveRoom",
     components: {
         vButton,
         vModal

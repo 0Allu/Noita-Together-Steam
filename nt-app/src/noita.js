@@ -111,6 +111,10 @@ class NoitaGame extends EventEmitter {
         this.on("GameSpellList", (payload) => {
             this.setSpellList(payload)
         })
+        // for the perk ban picker in Game Options
+        this.on("GamePerkList", (payload) => {
+            if (payload && Array.isArray(payload.perks)) appEvent("GamePerkList", payload.perks)
+        })
         this.on("RequestPlayerList", () => {
             this.sendPlayerList()
             this.sendEvt("UpdateFlags", this.gameFlags)
@@ -224,6 +228,26 @@ class NoitaGame extends EventEmitter {
                 toGameData[deathPenalty] = {
                     flag: `${flag.flag}_${flag.strVal}`
                 }
+            }
+            // shared health shares max hp, so hearts must not be handed out a second time
+            if (flag.strVal === "shared_health") {
+                for (let i = toGameData.length - 1; i >= 0; i--) {
+                    if (toGameData[i].flag === "NT_sync_hearts") toGameData.splice(i, 1)
+                }
+            }
+        }
+
+        // the ban list is a string flag; the mod still switches its perk ban code on with
+        // NT_ban_perks, which has to come after NT_banned_perks
+        const bannedPerks = toGameData.find((flag) => flag.flag === "NT_banned_perks")
+        if (bannedPerks && bannedPerks.strVal) {
+            toGameData.push({ flag: "NT_ban_perks" })
+        }
+
+        // one shared wallet: nothing to deposit in the gold bank
+        if (toGameData.some((entry) => entry.flag === "NT_shared_gold")) {
+            for (let i = toGameData.length - 1; i >= 0; i--) {
+                if (toGameData[i].flag === "NT_send_gold") toGameData.splice(i, 1)
             }
         }
 

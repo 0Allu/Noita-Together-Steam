@@ -20,6 +20,8 @@ function buildManifests(){
     let paths = fs.readdirSync(currDir)
     console.log(paths)
     for (const modPath of paths) {
+        // noita_mod/manifest.json lists the mods; only the folders get a manifest
+        if (!fs.statSync(path.join(currDir, modPath)).isDirectory()) continue
         buildManifest(path.join(currDir, modPath))
     }
 }
@@ -41,7 +43,6 @@ function buildManifest(workingDirectory){
 
         fileHashes.files[relPath] = hash(fileContents).toLowerCase()
     });
-    console.log(fileHashes)
     fs.writeFileSync(path.join(workingDirectory, 'manifest.json'), JSON.stringify(fileHashes, undefined, 2), 'utf8')
 }
 
