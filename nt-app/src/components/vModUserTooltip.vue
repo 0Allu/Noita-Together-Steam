@@ -16,7 +16,7 @@
                 <p v-for="mod in user.mods" :key="mod">{{ mod }}</p>
             </div>
             <div v-else>
-                <p>Waiting for game (make sure noita-together mod is enabled in game)...</p>
+                <p>Waiting for the game. Make sure the noita-together mod is enabled in Noita.</p>
             </div>
         </div>
     </div>
@@ -36,24 +36,24 @@ export default {
             tooltip: null,
             matches: {
                 version: {
-                    hostMsg: "User is not on the same mod version.",
-                    userMsg: "You are not in the same game branch as the host.",
+                    hostMsg: "Not on the same mod version.",
+                    userMsg: "You're not on the same mod version as the host.",
                 },
                 beta: {
-                    hostMsg: "User is not in the same game branch.",
-                    userMsg: "You are not in the same game branch as the host.",
+                    hostMsg: "Not on the same game branch.",
+                    userMsg: "You're not on the same game branch as the host.",
                 },
                 seed: {
-                    hostMsg: "User is not in the same seed.",
-                    userMsg: "You are not in the same seed as the host."
+                    hostMsg: "Not on the same seed.",
+                    userMsg: "You're not on the same seed as the host."
                 },
                 nemesis_notfound: {
-                    hostMsg: "noita-nemesis mod needs to be enabled",
-                    userMsg: "noita-nemesis mod needs to be enabled"
+                    hostMsg: "The noita-nemesis mod needs to be enabled.",
+                    userMsg: "The noita-nemesis mod needs to be enabled."
                 },
                 nemesis_order: {
-                    hostMsg: "noita-nemesis needs to be above noita-together in the game's mod list order",
-                    userMsg: "noita-nemesis needs to be above noita-together in the game's mod list order"
+                    hostMsg: "noita-nemesis needs to be above noita-together in the game's mod list.",
+                    userMsg: "noita-nemesis needs to be above noita-together in the game's mod list."
                 }
             },
         };

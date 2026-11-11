@@ -110,7 +110,13 @@ if (distance < 24) then
                     SpawnFlask(item.content, x, y)
                 end
             elseif (item.path ~= nil) then
-                EntityLoad(item.path, x, y)
+                -- the path comes from whoever deposited the item; only spawn the
+                -- pickups spell_eater.lua accepts, never an arbitrary entity file
+                if (nt_items[item.path] ~= nil) then
+                    EntityLoad(item.path, x, y)
+                else
+                    print_error("(NT) refused to spawn unknown bank item " .. tostring(item.path))
+                end
             end
         end
         NT.queuedItems = "[]"

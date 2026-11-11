@@ -60,8 +60,14 @@ incompatible version don't show up in the list.
   Steam app ID, like Entangled Worlds), so Steam's Play button turns into Stop.
   Start the game with the Start Noita button in the room instead. Pressing Stop
   in Steam closes the app.
-- Run stats are posted in chat when the host ends the run, since the stats
+- During a run, the host can end it for everyone with End Run, next to Start
+  Run. Click it, then click it again within 4 seconds to confirm. Everyone's
+  game ends with "The host ended the run".
+- The room ends the run when a death ends it for everyone, or once every
+  player has died or won. Run stats are posted in chat then, since the stats
   website is gone.
+- With Share all perks on, Gamble shares the two perks it gives, so everyone
+  gets the same ones.
 
 ### Room options added in this fork
 
@@ -69,6 +75,9 @@ incompatible version don't show up in the list.
   change it later by clicking the player count in the room.
 - Shared random seed picks one random world for everyone and a new one
   after every run.
+- Different starting loadouts gives each player their own starting wand, bomb
+  wand and potion. Without it, everyone on the same seed starts with the same
+  ones. It only shows up when the world seed is shared.
 - Shared Gold gives the whole team one wallet. Send Gold is turned off
   while it's on.
 - Shared health (ends run) is a death penalty: the team shares one health
@@ -77,6 +86,11 @@ incompatible version don't show up in the list.
 - Banned perks lets the host ban any perk, in both co-op and Nemesis. The
   full perk list shows up after Noita has connected to the app for the first
   time.
+- Filter invalid data (on by default) has the host's app drop messages that a
+  normal game never sends, such as chat floods, bank items or spells that don't
+  exist, and impossible gold or health values. The host gets a notice in chat.
+  It can't catch cheats that stay inside a player's own game, like god mode.
+  Kick repeat offenders kicks a player after 5 dropped messages.
 - Game options are grouped into sections, and options that don't apply to the
   current settings are hidden.
 
@@ -150,7 +164,7 @@ installs it when the app closes, or right away from the "Restart now" button.
 1. Raise `"version"` in `nt-app/package.json`. The app only updates to a higher
    version number.
 2. Build the installer with `yarn buildClient`.
-3. Create a GitHub release with a tag matching the version, like `v0.12.1`, and
+3. Create a GitHub release with a tag matching the version, like `v0.13.0`, and
    upload these three files from `nt-app/dist_electron`:
    - `Noita-Together-Steam-Setup.exe`
    - `Noita-Together-Steam-Setup.exe.blockmap`
@@ -165,6 +179,51 @@ Set `NT_STEAM_APPID=480` to run the Steam helper as Spacewar, Valve's free test
 app, instead of Noita. Lobbies created that way are only visible to other
 copies running as Spacewar. See [nt-steam-bridge](nt-steam-bridge/README.md)
 for the other settings.
+
+### Testing alone with bots
+
+Steam only allows one signed-in account per PC, so you can't join your own
+room from a second app. Test bots let you try room features alone: they join
+your room as fake players and go through the same room code as real players,
+including "Filter invalid data".
+
+Start the app with `NT_DEV_BOTS=1` set. In PowerShell, for a development build:
+
+```powershell
+$env:NT_DEV_BOTS = "1"
+yarn client
+```
+
+Or for the installed app:
+
+```powershell
+$env:NT_DEV_BOTS = "1"
+& "C:\Program Files\Noita Together\Noita Together.exe"
+```
+
+Host a room, and the chat says the bots are on. Type commands in the room chat
+in the app:
+
+| Command | What it does |
+| --- | --- |
+| `/bot add [name]` | A bot joins. Later commands go to the newest bot. |
+| `/bot list`, `/bot use <number>`, `/bot remove [number\|all]` | Manage bots. |
+| `/bot ready`, `/bot unready` | Ready up with your seed and mods, so there's no mismatch warning. |
+| `/bot say <text>` | Chat as the bot. |
+| `/bot follow`, `/bot stay` | During a run, the bot walks next to you in game. |
+| `/bot gold <n>` | The bot gains n gold (negative to spend). With Shared Gold on during a run, the team gets it too. |
+| `/bot hurt <hp>`, `/bot heal <hp>`, `/bot maxhp <hp>` | The bot's health, in the hp the game shows. Shared with shared health on. |
+| `/bot status` | Each bot's gold and health. |
+| `/bot perk <PERK_ID>` | Share a team perk. |
+| `/bot spell <SPELL_ID>` | Put a spell in the bank. |
+| `/bot die`, `/bot win` | The bot dies or wins. |
+| `/bot bad <kind>` | Send invalid data: `spam`, `chatspam`, `longchat`, `spell`, `item`, `wand`, `flask`, `gold`, `hp`, `perk`, `banned`, `join`, or `all`. |
+
+Bots keep their own gold and health like a player does. When Shared Gold or
+shared health is turned on during a run, they take part in picking the highest
+wallet and health. Other game events (perks, the bank) only do something during
+a run and with the matching room option on.
+Bots don't exist without the environment variable, so players never see them.
 
 ### The mod
 

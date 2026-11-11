@@ -384,7 +384,7 @@ if not initialized then
             end
         elseif (item.path ~= nil) then
             local player = PlayerList[item.sentBy] or {name=GameTextGet("$noitatogether_me")}
-            local item_name = nt_items[item.path] and nt_items[item.path].name or ""
+            local item_name = nt_items[item.path] and nt_items[item.path].name or "Unknown item (won't spawn)"
             item_name = GameTextGetTranslatedOrNot(item_name)
             if (player ~= nil) then
                 item_name = item_name .. "\n" .. GameTextGet("$noitatogether_sent_by_player", player.name)
@@ -527,7 +527,7 @@ if not initialized then
                     table.insert(ret, item)
                 end
             elseif (item.path ~= nil) then -- entity item
-                local item_name = nt_items[item.path] and nt_items[item.path].name or ""
+                local item_name = nt_items[item.path] and nt_items[item.path].name or "Unknown item (won't spawn)"
                 item_name = GameTextGetTranslatedOrNot(item_name)
                 if (string.find(string.lower(item_name), string.lower(filterkey))) then
                     table.insert(ret, item)
@@ -989,16 +989,19 @@ if not initialized then
             was_hovering_textbox = is_hovering_textbox
         end
         
+        -- notices stack downwards so they don't cover each other
+        local notice_y = 50
         local seed = ModSettingGet( "noita_together.seed" )
         local current_seed = tonumber(StatsGetValue("world_seed"))
         if (current_seed ~= seed and seed > 0) then
-            GuiImageNinePiece(gui, next_id(), (screen_width / 2) - 90, 50, 180, 20, 0.8)
-            GuiText(gui, (screen_width / 2) - 80, 55, "$noitatogether_host_changed_seed")
+            GuiImageNinePiece(gui, next_id(), (screen_width / 2) - 90, notice_y, 180, 20, 0.8)
+            GuiText(gui, (screen_width / 2) - 80, notice_y + 5, "$noitatogether_host_changed_seed")
+            notice_y = notice_y + 28
         end
 
-        if (NT ~= nil and NT.run_ended) then
-            GuiImageNinePiece(gui, next_id(), (screen_width / 2) - 90, 50, 180, 20, 0.8)
-            GuiText(gui, (screen_width / 2) - 80, 55, NT.end_msg)
+        if (NT ~= nil and NT.run_ended and NT.end_msg ~= nil and NT.end_msg ~= "") then
+            GuiImageNinePiece(gui, next_id(), (screen_width / 2) - 90, notice_y, 180, 20, 0.8)
+            GuiText(gui, (screen_width / 2) - 80, notice_y + 5, NT.end_msg)
         end
 
         if (selected_player and PlayerList[selected_player] ~= nil) then

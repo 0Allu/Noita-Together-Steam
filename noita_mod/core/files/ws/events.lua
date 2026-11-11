@@ -9,6 +9,21 @@ customEvents = {
     SharedHealth = function(data)
         if (SharedPoolsOnHealth ~= nil) then SharedPoolsOnHealth(data) end
     end,
+    -- the host pressed End Run in the app. Only the room itself sends this ("-1" is
+    -- the room's system user; the app never lets a player set userId).
+    EndRun = function(data)
+        if (data.userId ~= "-1") then return end
+        NT.end_msg = GameTextGet("$noitatogether_host_ended_run")
+        NT.end_cause = NT.end_msg
+        FinishRun()
+    end,
+    -- sent right before a PlayerDeath: what killed them
+    DeathCause = function(data)
+        local user = PlayerList[data.userId]
+        if (user ~= nil and type(data.cause) == "string") then
+            user.death_cause = data.cause:sub(1, 100)
+        end
+    end,
     PlayerPOI = function(data)
         local user = PlayerList[data.userId]
         if (user == nil) then
@@ -219,7 +234,14 @@ wsEvents = {
             PlayerList[data.userId].curHp = 0
             --msg = PlayerList[data.userId].name .. " has died." --changed the text of this, so just commenting out for now..
             if (GameHasFlagRun("NT_death_penalty_end") or GameHasFlagRun("NT_death_penalty_weak_respawn") or GameHasFlagRun("NT_death_penalty_shared_health")) then
-                NT.end_msg = GameTextGet("$noitatogether_player_died", PlayerList[data.userId].name)
+                local user = PlayerList[data.userId]
+                NT.end_msg = GameTextGet("$noitatogether_player_died", user.name)
+                -- shown as the cause of death on the game over screen
+                if (user.death_cause ~= nil and user.death_cause ~= "") then
+                    NT.end_cause = NT.end_msg .. ": " .. user.death_cause
+                else
+                    NT.end_cause = NT.end_msg
+                end
                 FinishRun()
             end
         end
@@ -252,8 +274,13 @@ wsEvents = {
             if (entry.flag == "NT_sync_world_seed") then
                 ModSettingSet("noita_together.seed", entry.uIntVal)
                 local seed = tonumber(StatsGetValue("world_seed"))
-                if (entry.uIntVal > 0 and seed ~= entry.uIntVal) then
-                    GameTriggerGameOver()
+                if (entry.uIntVal > 0 and seed ~= entry.uIntVal and not NT.run_ended) then
+                    local player = GetPlayer()
+                    if (player ~= nil) then
+                        KillPlayerWithCause(player, GameTextGet("$noitatogether_host_changed_seed"))
+                    else
+                        GameTriggerGameOver()
+                    end
                     --elseif (entry.intVal == seed) then messes up random perks/items sadge
                     --ModSettingSet( "noita_together.seed", 0 )
                 end

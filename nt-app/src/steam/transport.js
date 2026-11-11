@@ -9,6 +9,7 @@ const EventEmitter = require("events")
 const { NT } = require("@noita-together/nt-message")
 const defaultBridge = require("./bridge")
 const { HostRoom, SYSTEM_USER, lobbyMsg, chatMsg } = require("./hostRoom")
+const { DevBots } = require("./devBots")
 
 // Stored in lobby metadata; rooms with a different value aren't listed or joinable.
 // Bump whenever the messages exchanged between apps change incompatibly.
@@ -190,6 +191,7 @@ class SteamTransport extends EventEmitter {
                     opts,
                     send: (userId, msg) => {
                         if (userId === this.user.userId) this.deliver(msg)
+                        else if (room.devBots && room.devBots.has(userId)) room.devBots.receive(userId, msg)
                         else this.bridge.sendTo(userId, msg)
                     },
                     onLobbyStateChange: () => {
@@ -197,12 +199,19 @@ class SteamTransport extends EventEmitter {
                     },
                     onDestroyed: () => {
                         if (this.room === room) this.endSession(500)
+                    },
+                    onRunOver: () => {
+                        if (this.room === room) this.emit("runOver")
                     }
                 })
                 this.room = room
                 this.state = State.HOSTING
                 this.emit("lobby", { lobbyId: this.lobbyId, code: this.lobbyCode, host: true })
                 room.sendCreated()
+                if (DevBots.enabled()) {
+                    room.devBots = new DevBots(room, { NT, chat: (m) => room.send(room.owner, chatMsg(SYSTEM_USER, m)) })
+                    room.devBots.reply("Test bots are on (NT_DEV_BOTS). Type /bot help in chat.")
+                }
             })
             .catch((err) => {
                 if (this.state !== State.CREATING) return

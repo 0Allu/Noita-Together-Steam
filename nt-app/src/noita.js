@@ -1,4 +1,5 @@
 const EventEmitter = require("events")
+const http = require("http")
 const path = require("path")
 const ws = require("ws")
 const { v4: uuidv4 } = require("uuid")
@@ -7,6 +8,8 @@ const cmdLineArgs = require("./cmdLineArgs")
 const { ipcMain } = require("electron")
 const { NT } = require("@noita-together/nt-message")
 const { decodeFrames } = require("./frameCoder")
+const { gameData } = require("./steam/dataFilter")
+const { writeRoomSeed, loadoutShift } = require("./roomSeed")
 function sysMsg(message) {
     appEvent("sChat", {
         id: uuidv4(),
@@ -27,6 +30,10 @@ function rotLerp(a, b, weight) {
 }
 
 const distSquaredThreshold = 400 * 400
+
+// Events the game socket must never trigger: EventEmitter's own ("error" with no
+// listener throws in the main process) and the ones this class emits itself.
+const RESERVED_GAME_EVENTS = new Set(["error", "newListener", "removeListener", "GAME_OPEN", "GAME_CLOSE"])
 
 class NoitaGame extends EventEmitter {
     constructor() {
@@ -55,6 +62,9 @@ class NoitaGame extends EventEmitter {
         this.onDeathKick = false
         this.lastX = 0
         this.lastY = 0
+        // no room yet: forget the seed from an earlier session. Not in gameListen: the
+        // room view starts that after the room exists and its seed is already written.
+        writeRoomSeed(0)
         ipcMain.once("game_listen", () => {
             this.gameListen()
         })
@@ -83,9 +93,41 @@ class NoitaGame extends EventEmitter {
         this.sendEvt('ClientDisconnected')
     }
 
+    /**
+     * Browsers send an Origin header with every websocket handshake; Noita's websocket
+     * library (pollnet / tungstenite) never does. Rejecting it stops web pages open in
+     * the user's browser from connecting to ws://localhost.
+     */
+    isBrowserRequest(req) {
+        return req.headers.origin !== undefined
+    }
+
     gameListen() {
         if (!this.server) {
-            this.server = new ws.Server({ port: this.port })
+            this.server = new ws.Server({ noServer: true })
+            // The game connects to "localhost", which can be 127.0.0.1 or ::1, so listen on
+            // both loopback addresses and nothing else (unless remote Noita is allowed).
+            const hosts = cmdLineArgs.isAllowRemoteNoita() ? [undefined] : ["127.0.0.1", "::1"]
+            for (const host of hosts) {
+                const httpServer = http.createServer((req, res) => {
+                    res.writeHead(426)
+                    res.end()
+                })
+                httpServer.on("upgrade", (req, sock, head) => {
+                    if (this.isBrowserRequest(req)) {
+                        sock.end("HTTP/1.1 403 Forbidden\r\n\r\n")
+                        return
+                    }
+                    this.server.handleUpgrade(req, sock, head, (socket) => {
+                        this.server.emit("connection", socket, req)
+                    })
+                })
+                httpServer.on("error", (err) => {
+                    // e.g. no IPv6 on this machine; the other address still works
+                    console.log(`[Game WS] can't listen on ${host || "all addresses"}:${this.port}: ${err.message}`)
+                })
+                httpServer.listen(this.port, host)
+            }
         }
         this.server.on("connection", (socket) => {
             //console.log("[Game WS] New connection(?)")
@@ -113,7 +155,10 @@ class NoitaGame extends EventEmitter {
         })
         // for the perk ban picker in Game Options
         this.on("GamePerkList", (payload) => {
-            if (payload && Array.isArray(payload.perks)) appEvent("GamePerkList", payload.perks)
+            if (payload && Array.isArray(payload.perks)) {
+                appEvent("GamePerkList", payload.perks)
+                gameData.setPerks(payload.perks.map((p) => p && p.id).filter(Boolean))
+            }
         })
         this.on("RequestPlayerList", () => {
             this.sendPlayerList()
@@ -141,6 +186,9 @@ class NoitaGame extends EventEmitter {
     // event and ping
     // {event: "", payload: {}}
     gameMessage(data, socket) {
+        // only one game connection at a time: the first socket to talk claims it, and
+        // nothing else can inject events while it's open
+        if (this.client && socket !== this.client) return
         let dataJSON = null
         if (data.slice(0, 1) == ">") {
             if (data == ">RES> [no value]") {
@@ -158,20 +206,17 @@ class NoitaGame extends EventEmitter {
                 return
             }
         }
-        if (dataJSON.event == "ping") {
-            if (!this.client) {
-                //console.log("[Game] Connected.")
-                this.client = socket
-                this.emit("GAME_OPEN")
-                this.bankToGame()
-            }
-        } else {
-            /*
-            console.log({ dataJSON })
-            console.log()
-            */
-            this.emit(dataJSON.event, dataJSON.payload)
+        if (!dataJSON || typeof dataJSON.event !== "string") return
+        if (!this.client) {
+            //console.log("[Game] Connected.")
+            this.client = socket
+            this.emit("GAME_OPEN")
+            this.bankToGame()
         }
+        if (dataJSON.event == "ping") return
+        // only events something listens for, and never EventEmitter's own
+        if (RESERVED_GAME_EVENTS.has(dataJSON.event) || this.listenerCount(dataJSON.event) === 0) return
+        this.emit(dataJSON.event, dataJSON.payload)
     }
 
     get isPaused() {
@@ -214,6 +259,14 @@ class NoitaGame extends EventEmitter {
     updateFlags(data) {
         // don't mutate the input!
         const toGameData = data.map((v) => ({ ...v }))
+
+        // the mod reads this when a new game starts, before it can hear from us
+        const seedFlag = toGameData.find((flag) => flag.flag === "NT_sync_world_seed")
+        const ownLoadout = toGameData.some((flag) => flag.flag === "NT_random_loadouts")
+        writeRoomSeed(
+            seedFlag ? Number(seedFlag.uIntVal) || 0 : 0,
+            ownLoadout ? loadoutShift(this.user.userId) : 0
+        )
 
         // to avoid making changes to how the mod deals with flags, convert our pseudo-enum
         // ("NT_death_penalty", "end") into a boolean flag ("NT_death_penalty_end") before
@@ -299,7 +352,10 @@ class NoitaGame extends EventEmitter {
         this.sendEvt("ItemBank", { items: bank, gold: this.bank.gold })
     }
 
-    setSpellList(data) {}
+    setSpellList(data) {
+        // the host's "Filter invalid data" option checks deposited spells against this
+        if (data && Array.isArray(data.spells)) gameData.setSpells(data.spells)
+    }
 
     sendPlayerList() {
         for (let player in this.players) {
@@ -308,6 +364,7 @@ class NoitaGame extends EventEmitter {
     }
 
     reset() {
+        writeRoomSeed(0)
         this.setHost(false)
         this.rejectConnections = true
         this.spellList = []
@@ -570,9 +627,10 @@ class NoitaGame extends EventEmitter {
             return
         }
         try {
+            // userId last: the sender's JSON can't claim to be someone else
             this.sendEvt("CustomModEvent", {
-                userId: payload.userId,
-                ...JSON.parse(payload.payload)
+                ...JSON.parse(payload.payload),
+                userId: payload.userId
             })
         } catch (error) {}
     }
@@ -614,7 +672,9 @@ class NoitaGame extends EventEmitter {
     sNemesisAbility (payload) => {},
     */
     sChat(payload) {
-        this.sendEvt("Chat", payload)
+        // only while the game is connected: old chat shouldn't pile up for later
+        if (!this.client || !payload) return
+        this.sendEvt("Chat", { name: payload.name || "", message: payload.message || "" })
     }
 }
 

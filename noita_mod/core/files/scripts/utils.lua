@@ -377,6 +377,20 @@ function SendGamePerkList()
         })
     end
     SendWsEvent({ event = "GamePerkList", payload = { perks = perks } })
+    SendGameSpellList()
+end
+
+-- Tell the app which spells this game has; a hosting app uses it to drop bank deposits
+-- of spells that don't exist ("Filter invalid data").
+function SendGameSpellList()
+    dofile_once("data/scripts/gun/gun_enums.lua")
+    dofile_once("data/scripts/gun/gun_actions.lua")
+    if (actions == nil or SendWsEvent == nil) then return end
+    local ids = {}
+    for _, spell in ipairs(actions) do
+        table.insert(ids, spell.id)
+    end
+    SendWsEvent({ event = "GameSpellList", payload = { spells = ids } })
 end
 
 function GetLastCheckPoint()
@@ -397,27 +411,84 @@ function GetLastCheckPoint()
     return x, y --justin case? 
 end
 
+-- What last hurt the player (from damage_received.lua), like "Hiisi Shotgunner (projectile)".
+function LastDamageCause()
+    local who = GlobalsGetValue("NT_last_damage_by", "")
+    local msg = GlobalsGetValue("NT_last_damage_msg", "")
+    if who ~= "" then who = GameTextGetTranslatedOrNot(who) end
+    if msg ~= "" then msg = GameTextGetTranslatedOrNot(msg) end
+    if who:find("DEBUG_NAME", 1, true) then who = "" end
+    local cause = msg
+    if who ~= "" and msg ~= "" and who ~= msg then
+        cause = who .. " (" .. msg .. ")"
+    elseif who ~= "" then
+        cause = who
+    end
+    if #cause > 100 then cause = cause:sub(1, 97) .. "..." end
+    return cause
+end
+
+-- Kill the player with a damage message, so the game over screen shows `cause` instead of
+-- "deferred death". If that doesn't kill them (Saving Grace, invulnerability), KillPlayerTick
+-- falls back to the old kill a few frames later.
+function KillPlayerWithCause(entity, cause)
+    if NT.kill_frame ~= nil and NT.kill_frame > 0 then return end
+    NT.kill_frame = GameGetFrameNum()
+    NT.kill_done = false
+    if entity == nil then return end
+    local damage_model = EntityGetFirstComponent(entity, "DamageModelComponent")
+    if damage_model == nil then return end
+    if cause == nil or cause == "" then cause = "?" end
+    ComponentSetValue2(damage_model, "wait_for_kill_flag_on_death", false)
+    local hp = math.max(0, ComponentGetValue2(damage_model, "hp"))
+    local max_hp = ComponentGetValue2(damage_model, "max_hp")
+    EntityInflictDamage(entity, hp + max_hp + 100, "DAMAGE_CURSE", cause, "NORMAL", 0, 0, 0)
+end
+
+function KillPlayerTick()
+    if NT == nil or NT.kill_frame == nil or NT.kill_frame <= 0 or NT.kill_done then return end
+    if GameGetFrameNum() < NT.kill_frame + 10 then return end
+    NT.kill_done = true
+    local player = GetPlayer()
+    if player == nil then
+        local polymorphed, entity_id = IsPlayerPolymorphed()
+        if polymorphed then player = entity_id end
+    end
+    if player ~= nil then
+        local damage_model = EntityGetFirstComponent(player, "DamageModelComponent")
+        if damage_model ~= nil then
+            ComponentSetValue2(damage_model, "hp", 0.0)
+            ComponentSetValue2(damage_model, "kill_now", true)
+        end
+    end
+    GameTriggerGameOver()
+end
+
 function EndRun()
     if (NT.run_ended) then return end
     NT.run_ended = true
     local win = GameHasFlagRun("ending_game_completed")
+    if not win then
+        -- tell the others what killed us; they show it on their game over screen
+        local cause = LastDamageCause()
+        if cause ~= "" then
+            SendWsEvent({event="CustomModEvent", payload={name="DeathCause", cause=cause}})
+        end
+    end
     SendWsEvent({event="PlayerDeath", payload={isWin=win, gameTime=GameGetFrameNum()}})
 end
 
+-- Someone else's death ends the run (NT.end_cause says who died and to what).
 function FinishRun()
     if (NT.run_ended or not NT.run_started) then return end
     NT.run_ended = true
-    
+
     local player = GetPlayer()
-    local damage_models = nil
-    if (player ~= nil) then
-        damage_models = EntityGetFirstComponent(player, "DamageModelComponent")
+    if player == nil then
+        local polymorphed, entity_id = IsPlayerPolymorphed()
+        if polymorphed then player = entity_id end
     end
-    if (damage_models ~= nil) then
-        ComponentSetValue2(damage_models, "hp", 0.0)
-        ComponentSetValue2(damage_models, "kill_now", true)
-    end
-    GameTriggerGameOver()
+    KillPlayerWithCause(player, NT.end_cause or NT.end_msg)
     SendWsEvent({event="RunOver", payload={}})
 end
 
@@ -440,7 +511,7 @@ function RespawnPenalty(userId)
         if (new_max < 1) then
             GamePrintImportant("$noitatogether_run_end_lowhp_title", "$noitatogether_run_end_lowhp_subtitle")
             EndRun()
-            ComponentSetValue2(damage_models, "kill_now", true)
+            KillPlayerWithCause(player, GameTextGet("$noitatogether_player_died", player_name) .. ": " .. GameTextGet("$noitatogether_run_end_lowhp_title"))
             return
         end
         ComponentSetValue2(damage_models, "max_hp", new_max)
@@ -489,8 +560,7 @@ function PlayerRespawn(entity_id, poly, weak)
                 if (max_hp < 1) then
                     --Send death
                     EndRun()
-                    ComponentSetValue2(damage_models, "hp", 0.0)
-                    ComponentSetValue2(damage_models, "kill_now", true)
+                    KillPlayerWithCause(player, LastDamageCause())
                     return
                 end
                 local new_max = math.max(1, max_hp )
@@ -555,7 +625,7 @@ function IsPlayerDead()
             -- shared health: the team has one health bar, so a death ends the run like "End run"
             if (GameHasFlagRun("NT_death_penalty_end") or GameHasFlagRun("NT_death_penalty_shared_health")) then
                 EndRun()
-                ComponentSetValue2(damage_models, "kill_now", true)
+                KillPlayerWithCause(player, LastDamageCause())
             elseif(GameHasFlagRun("NT_death_penalty_weak_respawn")) then
                 PlayerRespawn(player, false, true)
             elseif(GameHasFlagRun("NT_death_penalty_full_respawn")) then
@@ -569,7 +639,10 @@ function IsPlayerDead()
 
     damage_models = EntityGetFirstComponent(entity_id, "DamageModelComponent")
     if (damage_models ~= nil) then
-        ComponentSetValue2(damage_models, "wait_for_kill_flag_on_death", true)
+        -- (not while KillPlayerWithCause is finishing them off)
+        if (NT.kill_frame == nil or NT.kill_frame <= 0) then
+            ComponentSetValue2(damage_models, "wait_for_kill_flag_on_death", true)
+        end
         local curHp = ComponentGetValue2(damage_models, "hp")
         if (curHp < 0.0) then
             if (GameHasFlagRun("ending_game_completed")) then
@@ -579,8 +652,8 @@ function IsPlayerDead()
             
             -- shared health: the team has one health bar, so a death ends the run like "End run"
             if (GameHasFlagRun("NT_death_penalty_end") or GameHasFlagRun("NT_death_penalty_shared_health")) then
-                ComponentSetValue2(damage_models, "kill_now", true)
                 EndRun()
+                KillPlayerWithCause(entity_id, LastDamageCause())
             elseif(GameHasFlagRun("NT_death_penalty_weak_respawn")) then
                 PlayerRespawn(entity_id, true, true)
             elseif(GameHasFlagRun("NT_death_penalty_full_respawn")) then

@@ -5,7 +5,7 @@
     "files/append/disable_mail.lua": "37ada7e9cb3365fc882e5fca8145c13f66f2e0a0cd38d89e97da64d69266e83a",
     "files/append/flags.lua": "b0c647c22f551eb1aa6c230e614990efeb17efcc578dd57a8a57dd683993efd5",
     "files/append/perk.lua": "5ec708ce742fbc04a9bb94d49d5b50aeb8489ef1a7b4f7e785201fb0c3128924",
-    "files/append/ui.lua": "f5ef974a1ffd87fa601b6449838152b5800a85fe30aa4eb40cc7967f6eea86c0",
+    "files/append/ui.lua": "6294f431188493616cd4a9ef92bcec22f6cccb295fda7ba517bcc6e3f81f98a8",
     "files/append/utils.lua": "c50a854a32a8e38783e7cdcf4d724a41664cd4856a98f68b4b6593cc7ca94dae",
     "files/append/workshop_exit.lua": "b5bbfe0b6d0483e3827ee2db741ce95a741cc9a31f442253018c5a78b3183d21",
     "files/badges/acid.png": "dabe7dcbe69e8cc270ca36d0be39b72f2a5e446b253c976f3b24c454f0540cb1",
@@ -92,5 +92,5 @@
     "init.lua": "efe15538be22d24bb08fb7676a38025b7c36e3895a33e1126eb9a64142758786",
     "mod.xml": "956efe2de1282cc694b4df390222f1cc705cd10814b86db6b421cfac49a18d1b"
   },
-  "buildDate": "2026-11-10T23:59:43.743Z"
+  "buildDate": "2026-11-11T22:55:10.201Z"
 }

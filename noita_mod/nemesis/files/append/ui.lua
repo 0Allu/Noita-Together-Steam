@@ -244,7 +244,7 @@ if not initialized then
             GuiTooltip(gui, container_name, flask_info(item.content, item.isChest))
         elseif (item.path ~= nil) then
             local player = PlayerList[item.sentBy] or {name="Me"}
-            local item_name = nt_items[item.path] and nt_items[item.path].name or ""
+            local item_name = nt_items[item.path] and nt_items[item.path].name or "Unknown item (won't spawn)"
             item_name = GameTextGetTranslatedOrNot(item_name)
             if (player ~= nil) then
                 item_name = item_name .. "\nSent by: " .. player.name
@@ -316,7 +316,7 @@ if not initialized then
                     table.insert(ret, item)
                 end
             elseif (item.path ~= nil) then -- entity item
-                local item_name = nt_items[item.path] and nt_items[item.path].name or ""
+                local item_name = nt_items[item.path] and nt_items[item.path].name or "Unknown item (won't spawn)"
                 item_name = GameTextGetTranslatedOrNot(item_name)
                 if (string.find(string.lower(item_name), string.lower(filterkey))) then
                     table.insert(ret, item)

@@ -90,6 +90,11 @@ module.exports = (data) => {
         }
     }
 
+    // the room in this app ended its run (host only)
+    client.on("runOver", () => {
+        appEvent("RUN_OVER")
+    })
+
     client.on("lobby", (info) => {
         appEvent("STEAM_LOBBY", info)
     })
@@ -112,6 +117,10 @@ module.exports = (data) => {
 
         switch (action) {
             case "sChat":
+                appEvent(action, gameAction[action])
+                // and in game, where the mod prints it unless chat is hidden there
+                noita.sChat(gameAction[action])
+                break
             case "sStatUpdate":
                 appEvent(action, gameAction[action])
                 break
@@ -285,6 +294,12 @@ module.exports = (data) => {
             const msg = encodeLobbyMsg("cRunOver", { idk: false })
             sendMsg(msg)
         }
+    })
+
+    // End Run in the room: ends every player's game (see HostRoom.endRun)
+    ipcMain.on("END_RUN", () => {
+        if (!isHost) return
+        sendMsg(encodeLobbyMsg("cRunOver", { idk: true }))
     })
 
     noita.on("SendGold", (event) => {

@@ -53,7 +53,7 @@
                 </div>
 
                 <p v-if="group.key === 'bank' && sharedGold && tempFlags.NT_send_gold" class="field-hint bank-hint">
-                    Gold is shared, so Send Gold is turned off.
+                    Gold is shared, so Send Gold is off until Shared Gold is turned off.
                 </p>
 
                 <!-- Sharing: how many orbs get shared -->
@@ -235,7 +235,8 @@ const OPTION_GROUPS = [
     { key: "sharing", title: "Shared between players", icon: "fa-people-arrows", switches: ["NT_shared_gold", "NT_sync_orbs", "NT_sync_orbs_no_curse", "NT_sync_shift", "NT_sync_steve"] },
     { key: "perks", title: "Perks", icon: "fa-star", switches: ["NT_team_perks", "NT_sync_perks"] },
     { key: "bank", title: "Item bank", icon: "fa-box-open", switches: ["NT_send_wands", "NT_send_flasks", "NT_send_items", "NT_send_gold"] },
-    { key: "world", title: "World", icon: "fa-globe-americas", switches: ["NT_world_randomize_loot"] }
+    { key: "world", title: "World", icon: "fa-globe-americas", switches: ["NT_world_randomize_loot", "NT_random_loadouts"] },
+    { key: "host", title: "Host checks", icon: "fa-filter", switches: ["NT_filter_invalid_data", "NT_filter_kick"] }
 ]
 
 // until the mod has sent the game's perk list
@@ -314,12 +315,16 @@ export default {
         /** switches that don't apply with the current settings */
         hiddenSwitches() {
             const hidden = ["NT_random_shared_seed"] // shown with the world seed
+            // these only change something when everyone plays the same world
+            if (!this.seedShared) hidden.push("NT_world_randomize_loot", "NT_random_loadouts")
             // max hp is shared, so hearts are shared through it
             if (this.sharedHealth) hidden.push("NT_sync_hearts")
             // one wallet for everyone, so there's no gold to deposit
             if (this.sharedGold) hidden.push("NT_send_gold")
             // "no effect without Sync Orbs"
             if (this.tempFlags.NT_sync_orbs && !this.tempFlags.NT_sync_orbs.value) hidden.push("NT_sync_orbs_no_curse")
+            // nothing to kick for without the filter
+            if (this.tempFlags.NT_filter_invalid_data && !this.tempFlags.NT_filter_invalid_data.value) hidden.push("NT_filter_kick")
             return hidden
         },
         groups() {
@@ -339,6 +344,10 @@ export default {
                 (g.key === "perks" && this.tempFlags.NT_banned_perks) ||
                 (g.key === "world" && this.tempFlags.NT_sync_world_seed)
             )
+        },
+        seedShared() {
+            const seed = this.tempFlags.NT_sync_world_seed
+            return this.sharedSeed || !!(seed && Number(seed.value) > 0)
         },
         sharedSeed() {
             const flag = this.tempFlags.NT_random_shared_seed
@@ -431,13 +440,9 @@ export default {
           if (!this.tempFlags.NT_sync_orbs.value) {
             this.tempFlags.NT_sync_orb_count.value = 0
           }
-          // shared health shares max hp, which already covers hearts
-          if (this.sharedHealth && this.tempFlags.NT_sync_hearts) {
-            this.tempFlags.NT_sync_hearts.value = false
-          }
-          if (this.sharedGold && this.tempFlags.NT_send_gold) {
-            this.tempFlags.NT_send_gold.value = false
-          }
+          // Sync Hearts and Send Gold keep their values while shared health / Shared Gold
+          // hide them. The app leaves them out for the game (noita.js updateFlags), so they
+          // come back as they were when those options are turned off again.
           // number inputs can hold "", negatives or decimals; the mod wants a whole number >= 0
           for (const id of ["NT_sync_orb_count", "NT_sync_world_seed"]) {
             const n = Math.floor(Number(this.tempFlags[id].value))
@@ -463,7 +468,7 @@ export default {
 
                 fs.readFile(filePath, 'utf-8', (err, data) => {
                   if(err){
-                    alert("An error ocurred reading the file :" + err.message);
+                    alert("Couldn't read that file: " + err.message);
                     return;
                   }
 

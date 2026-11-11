@@ -44,48 +44,54 @@ export const gamemodes = {
 /** @type {Record<number, Record<string, FlagDescriptor|Record<any, FlagDescriptor>>>} */
 export const flagInfo = {
     0: {
-        "NT_sync_perks":                  { name: "Share all perks", tooltip: "When grabbing perks the whole team will also get them." },
-        "NT_team_perks":                  { name: "Team Perks", tooltip: "When grabbing certain perks (not all) the whole team will also get them." },
+        "NT_sync_perks":                  { name: "Share all perks", tooltip: "When someone picks up a perk, the whole team gets it too." },
+        "NT_team_perks":                  { name: "Team Perks", tooltip: "When someone picks up certain perks (not all of them), the whole team gets them too." },
         "NT_alt_heartache":               { name: "Change Heartache", tooltip: "Change Heartache to affect HP instead of Max HP."},
-        "NT_banned_perks":                { name: "Banned Perks", tooltip: "Banned perks never show up in holy mountains (Gamble is safe), and anyone who already has one loses it. Banning Glass Cannon is recommended for large lobbies when using Respawn Penalty."},
+        "NT_banned_perks":                { name: "Banned Perks", tooltip: "Banned perks never show up in holy mountains (Gamble is safe), and anyone who already has one loses it. In large rooms with Respawn Penalty, consider banning Glass Cannon."},
         "NT_shared_gold":                 { name: "Shared Gold", tooltip: "One wallet for the whole team: gold someone picks up or spends changes everyone's gold. Send Gold is turned off, since there's nothing to send." },
         "NT_sync_steve":                  { name: "Sync Steve", tooltip: "Angers the gods for everyone." },
-        "NT_sync_hearts":                 { name: "Sync Hearts", tooltip: "When someone picks up a heart everyone else gets it too." },
-        "NT_sync_orbs":                   { name: "Sync Orbs", tooltip: "When someone picks up an orb everyone else gets it too." },
-        "NT_sync_orbs_no_curse":          { name: "Friendly PW Orbs", tooltip: "Parallel World orbs won't send cursed hearts to other players. No effect without \"Sync Orbs\"" },
-        "NT_sync_orb_count":              { name: "Sync Orb Until", tooltip: "Everyone gets an orb until this number is hit. If 0, then there is no limit" },
-        "NT_sync_shift":                  { name: "Sync Shifts", tooltip: "When someone fungal shifts everyone also gets the same shift, cooldown also applies." },
+        "NT_sync_hearts":                 { name: "Sync Hearts", tooltip: "When someone picks up a heart, everyone else gets it too." },
+        "NT_sync_orbs":                   { name: "Sync Orbs", tooltip: "When someone picks up an orb, everyone else gets it too." },
+        "NT_sync_orbs_no_curse":          { name: "Friendly PW Orbs", tooltip: "Parallel World orbs won't send cursed hearts to other players. Does nothing without \"Sync Orbs\"." },
+        "NT_sync_orb_count":              { name: "Sync Orb Until", tooltip: "Orbs are shared until this number is reached. 0 means no limit." },
+        "NT_sync_shift":                  { name: "Sync Shifts", tooltip: "When someone fungal shifts, everyone gets the same shift. The cooldown applies to everyone too." },
         "NT_send_wands":                  { name: "Send Wands", tooltip: "Allow players to deposit/take wands." },
         "NT_send_flasks":                 { name: "Send Flasks", tooltip: "Allow players to deposit/take flasks." },
         "NT_send_gold":                   { name: "Send Gold", tooltip: "Allow players to deposit/take gold." },
         "NT_send_items":                  { name: "Send Items", tooltip: "Allow players to deposit/take items." },
-        "NT_world_randomize_loot":        { name: "Randomize loot", tooltip: "Only applies when playing on the same seed, makes it so everyone gets different loot." },
+        "NT_world_randomize_loot":        { name: "Randomize loot", tooltip: "Everyone gets different loot. Only matters when everyone plays the same seed." },
+        "NT_random_loadouts":             { name: "Different starting loadouts", tooltip: "Each player starts with their own wand, bomb wand and potion. Without it, everyone on the same seed starts with the same ones. Takes effect on the next New Game." },
         "NT_random_shared_seed":          { name: "Shared random seed", tooltip: "Everyone plays the same world, with a new random seed picked for every run. Turn off to choose the seed yourself." },
-        "NT_sync_world_seed":             { name: "Sync Seed", tooltip: "All players play in the same world seed (requires everyone to start a new game). 0 means everyone gets their own random world." },
+        "NT_sync_world_seed":             { name: "Sync Seed", tooltip: "Everyone plays this world seed (everyone has to start a new game). 0 means everyone gets their own random world." },
         "NT_death_penalty": {
-            "end":           { name: "End run", tooltip: "Run ends for all players when someone dies." },
-            "weak_respawn":  { name: "Respawn Penalty", tooltip: "Player respawns and everyone takes a % drop on their max hp, once it goes below certain threshold on the weakest player the run ends for everyone." },
-            "full_respawn":  { name: "Respawn", tooltip: "Player will respawn on their last checkpoint and no penalties." },
+            "end":           { name: "End run", tooltip: "The run ends for everyone when someone dies." },
+            "weak_respawn":  { name: "Respawn Penalty", tooltip: "The player who died respawns, and everyone loses a percentage of their max HP. When the weakest player's max HP drops below a threshold, the run ends for everyone." },
+            "full_respawn":  { name: "Respawn", tooltip: "The player who died respawns at their last checkpoint, with no penalty." },
             "shared_health": { name: "Shared health (ends run)", tooltip: "The team shares one health bar: when anyone takes damage or heals, everyone does. Max HP is shared too, so hearts and max HP perks count for everyone (Sync Hearts is turned off). When anyone dies, the run ends for everyone." },
         },
-        "NT_ondeath_kick":                { name: "Kick on death", tooltip: "Kicks whoever dies, more customisable soon™. "},
+        "NT_ondeath_kick":                { name: "Kick on death", tooltip: "Whoever dies is kicked from the room."},
+        "NT_filter_invalid_data":         { name: "Filter invalid data", tooltip: "Your app, as the host, drops messages a normal game never sends: floods, very long chat messages, bank items and spells that don't exist, impossible gold and health values, banned team perks, and rapid password guesses. You get a chat notice when it happens. It can't see inside other players' games, so it doesn't stop cheats like god mode. Spells and perks are checked against your own game, so players need the same mods." },
+        "NT_filter_kick":                 { name: "Kick repeat offenders", tooltip: "Kick a player after 5 dropped messages." },
     },
     2: {
-        "NT_NEMESIS_ban_ambrosia":        { name: "Ban Ambrosia", tooltip: "will shift ambrosia away." },
+        "NT_NEMESIS_ban_ambrosia":        { name: "Ban Ambrosia", tooltip: "Shifts ambrosia away." },
         "NT_banned_perks":                { name: "Banned Perks", tooltip: "Banned perks never show up in holy mountains (Gamble is safe), and anyone who already has one loses it. Invisibility is handled by \"Ban Invisibility\"." },
-        "NT_NEMESIS_ban_invis":           { name: "Ban Invisibility", tooltip: "will shift invisibility away and remove the perk." },
-        "NT_NEMESIS_nemesis_abilities":   { name: "Nemesis abilities", tooltip: "Abilities will appear in each holy mountain with an NP cost." },
+        "NT_NEMESIS_ban_invis":           { name: "Ban Invisibility", tooltip: "Shifts invisibility away and removes the perk." },
+        "NT_NEMESIS_nemesis_abilities":   { name: "Nemesis abilities", tooltip: "Abilities show up in each holy mountain and cost NP." },
         "NT_sync_steve":                  { name: "Sync Steve", tooltip: "Angers the gods for everyone." },
-        "NT_sync_orbs":                   { name: "Sync Orbs", tooltip: "When someone picks up an orb everyone else gets it too." },
-        "NT_sync_orbs_no_curse":          { name: "Friendly PW Orbs", tooltip: "Parallel World orbs won't send cursed hearts to other players. No effect without \"Sync Orbs\"" },
-        "NT_sync_orb_count":              { name: "Sync Orb Until", tooltip: "Everyone gets an orb until this number is hit. If 0, then there is no limit" },
-        "NT_world_randomize_loot":        { name: "Randomize loot", tooltip: "Only applies when playing on the same seed, makes it so everyone gets different loot." },
+        "NT_sync_orbs":                   { name: "Sync Orbs", tooltip: "When someone picks up an orb, everyone else gets it too." },
+        "NT_sync_orbs_no_curse":          { name: "Friendly PW Orbs", tooltip: "Parallel World orbs won't send cursed hearts to other players. Does nothing without \"Sync Orbs\"." },
+        "NT_sync_orb_count":              { name: "Sync Orb Until", tooltip: "Orbs are shared until this number is reached. 0 means no limit." },
+        "NT_world_randomize_loot":        { name: "Randomize loot", tooltip: "Everyone gets different loot. Only matters when everyone plays the same seed." },
+        "NT_random_loadouts":             { name: "Different starting loadouts", tooltip: "Each player starts with their own wand, bomb wand and potion. Without it, everyone on the same seed starts with the same ones. Takes effect on the next New Game." },
         "NT_random_shared_seed":          { name: "Shared random seed", tooltip: "Everyone plays the same world, with a new random seed picked for every run. Turn off to choose the seed yourself." },
-        "NT_sync_world_seed":             { name: "Sync Seed", tooltip: "All players play in the same world seed (requires everyone to start a new game). 0 means everyone gets their own random world." },
+        "NT_sync_world_seed":             { name: "Sync Seed", tooltip: "Everyone plays this world seed (everyone has to start a new game). 0 means everyone gets their own random world." },
         "NT_death_penalty": {
-            "weak_respawn":  { name: "Last noita standing.", tooltip: "Run ends when there's only one player left." },
+            "weak_respawn":  { name: "Last Noita standing", tooltip: "The run ends when only one player is left." },
         },
-        "NT_ondeath_kick":                { name: "Kick on death", tooltip: "Kicks whoever dies, more customisable soon™. "}
+        "NT_ondeath_kick":                { name: "Kick on death", tooltip: "Whoever dies is kicked from the room."},
+        "NT_filter_invalid_data":         { name: "Filter invalid data", tooltip: "Your app, as the host, drops messages a normal game never sends: floods, very long chat messages, bank items and spells that don't exist, impossible gold and health values, banned team perks, and rapid password guesses. You get a chat notice when it happens. It can't see inside other players' games, so it doesn't stop cheats like god mode. Spells and perks are checked against your own game, so players need the same mods." },
+        "NT_filter_kick":                 { name: "Kick repeat offenders", tooltip: "Kick a player after 5 dropped messages." },
     },
 };
 
@@ -109,10 +115,13 @@ export const defaultFlags = {
         { id: "NT_send_gold",                  type: "boolean", value: true,  },
         { id: "NT_send_items",                 type: "boolean", value: true,  },
         { id: "NT_world_randomize_loot",       type: "boolean", value: true,  },
+        { id: "NT_random_loadouts",            type: "boolean", value: false, },
         { id: "NT_random_shared_seed",         type: "boolean", value: true,  },
         { id: "NT_sync_world_seed",            type: "number" , value: 0,     },
         { id: "NT_death_penalty",              type: "enum",    value: 'end', choices: ['end', 'weak_respawn', 'full_respawn', 'shared_health'], },
         { id: "NT_ondeath_kick",               type: "boolean", value: false, },
+        { id: "NT_filter_invalid_data",        type: "boolean", value: true,  }, // host-side, see steam/dataFilter.js
+        { id: "NT_filter_kick",                type: "boolean", value: false, },
     ],
     /** @type {VueFlag[]} */
     2: [
@@ -125,10 +134,13 @@ export const defaultFlags = {
         { id: "NT_sync_orbs_no_curse",         type: "boolean", value: false, requires: [{"NT_sync_orbs": true}] }, //TODO actually check requires :)
         { id: "NT_sync_orb_count",             type: "number" , value: 0,     },
         { id: "NT_world_randomize_loot",       type: "boolean", value: true,  },
+        { id: "NT_random_loadouts",            type: "boolean", value: false, },
         { id: "NT_random_shared_seed",         type: "boolean", value: false, },
         { id: "NT_sync_world_seed",            type: "number" , value: 0,     },
         { id: "NT_death_penalty",              type: "enum", value: 'weak_respawn', choices: ['weak_respawn'], },
-        { id: "NT_ondeath_kick",               type: "boolean", value: true,  }
+        { id: "NT_ondeath_kick",               type: "boolean", value: true,  },
+        { id: "NT_filter_invalid_data",        type: "boolean", value: true,  }, // host-side, see steam/dataFilter.js
+        { id: "NT_filter_kick",                type: "boolean", value: false, }
     ]
 };
 
@@ -366,6 +378,15 @@ const ipcPlugin = (ipc) => {
             store.commit("userReadyState", data)
         })
 
+        // only the host's app hears about the run ending (RUN_OVER)
+        ipc.on("sHostStart", () => {
+            store.commit("setRunInProgress", true)
+        })
+
+        ipc.on("RUN_OVER", () => {
+            store.commit("setRunInProgress", false)
+        })
+
         ipc.on("sRoomAddToList", (event, data) => {
             store.commit("addRoom", data.room)
         })
@@ -415,6 +436,7 @@ export default new Vuex.Store({
             color: ""
         },
         lobbies: [],
+        runInProgress: false,
         // [{id, name, desc, pool}] from the mod, remembered between sessions
         perkList: loadPerkList(),
         // short Steam lobby code others can use to join the current room
@@ -591,7 +613,11 @@ export default new Vuex.Store({
                 payload
             )
         },
+        setRunInProgress: (state, value) => {
+            state.runInProgress = value
+        },
         resetRoom: (state) => {
+            state.runInProgress = false
             state.stats = null
             state.room = {
                 id: "",
@@ -843,6 +869,9 @@ export default new Vuex.Store({
                 key: "cRoomFlagsUpdate",
                 payload: flagsToProto(state.room.gamemode, getters.flags)
             })
+        },
+        endRun: () => {
+            ipcRenderer.send("END_RUN")
         },
         startRun: (context, payload) => {
             ipcRenderer.send("CLIENT_MESSAGE", {

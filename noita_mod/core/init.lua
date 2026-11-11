@@ -50,6 +50,48 @@ ModLuaFileAppend("data/scripts/magic/fungal_shift.lua", "mods/noita-together/fil
 ModTextFileSetContent("data/scripts/status_effects/hearty_end.lua",ModTextFileGetContent("mods/noita-together/files/append/status_effects/hearty_end.lua"))
 ModTextFileSetContent("data/scripts/status_effects/hearty_start.lua",ModTextFileGetContent("mods/noita-together/files/append/status_effects/hearty_start.lua"))
 
+-- "Different starting loadouts": the starting wand, bomb wand and potion seed their
+-- rolls from the spawn position, so on a shared world seed everyone starts with the
+-- same items. Each script gets its own SetRandomSeed that shifts x by this player's
+-- number from the app (noita_together.loadout, set in OnModPreInit; 0 = unchanged).
+local LOADOUT_SCRIPTS = {
+    "data/scripts/gun/procedural/starting_wand.lua",
+    "data/scripts/gun/procedural/starting_bomb_wand.lua",
+    "data/scripts/items/potion_starting.lua",
+}
+local LOADOUT_PREFIX = "-- noita-together loadout\n" ..
+    "local __nt_SetRandomSeed = SetRandomSeed\n" ..
+    "local __nt_loadout = tonumber(ModSettingGet(\"noita_together.loadout\")) or 0\n" ..
+    "local function SetRandomSeed(x, y) return __nt_SetRandomSeed(x + __nt_loadout, y) end\n"
+for _, file in ipairs(LOADOUT_SCRIPTS) do
+    local ok, text = pcall(ModTextFileGetContent, file)
+    if ok and type(text) == "string" and text ~= "" and text:find("noita-together loadout", 1, true) == nil then
+        ModTextFileSetContent(file, LOADOUT_PREFIX .. text)
+    end
+end
+
+-- Gamble rolls its two perks with perk_pickup directly, so the perk_pickup.lua append
+-- never sees them. With "share all perks" on, send the perks this player's own Gamble
+-- rolled (files/scripts/gamble_share.lua), so everyone gets the same two.
+local GAMBLE_SCRIPT = "data/scripts/perks/perk_gamble_spawn.lua"
+local GAMBLE_PICKUP = 'perk_pickup(pid, player, "", false, false )'
+do
+    local ok, text = pcall(ModTextFileGetContent, GAMBLE_SCRIPT)
+    if ok and type(text) == "string" and text:find("noita-together gamble", 1, true) == nil then
+        local at = text:find(GAMBLE_PICKUP, 1, true)
+        if at ~= nil then
+            local stop = at + #GAMBLE_PICKUP
+            text = "-- noita-together gamble\n" ..
+                "dofile_once(\"mods/noita-together/files/scripts/gamble_share.lua\")\n" ..
+                "local __nt_share_gamble = NTGambleIsOwn()\n" ..
+                text:sub(1, stop - 1) ..
+                " if __nt_share_gamble then NTGambleSharePerk(comp.value_string) end" ..
+                text:sub(stop)
+            ModTextFileSetContent(GAMBLE_SCRIPT, text)
+        end
+    end
+end
+
 --emote system mnee support
 if ModIsEnabled("mnee") then
 	ModLuaFileAppend("mods/mnee/bindings.lua", "mods/noita-together/files/emotes/scripts/mnee.lua")
@@ -188,6 +230,9 @@ function OnWorldPostUpdate()
 
             --shared gold / shared health
             SharedPoolsTick()
+
+            --fallback for KillPlayerWithCause
+            KillPlayerTick()
         end
         local player = GetPlayer()
         local frame = GameGetFrameNum()
@@ -226,6 +271,19 @@ function OnPlayerSpawned(player_entity)
     dofile_once("mods/noita-together/files/store.lua")
     local damage_models = EntityGetFirstComponent(player_entity, "DamageModelComponent")
     if (damage_models ~= nil) then ComponentSetValue2(damage_models, "wait_for_kill_flag_on_death", true) end
+    -- remember what hurt the player, for the cause of death
+    local has_damage_script = false
+    for _, comp in ipairs(EntityGetComponent(player_entity, "LuaComponent") or {}) do
+        if ComponentGetValue2(comp, "script_damage_received") == "mods/noita-together/files/scripts/damage_received.lua" then
+            has_damage_script = true
+        end
+    end
+    if not has_damage_script then
+        EntityAddComponent2(player_entity, "LuaComponent", {
+            script_damage_received = "mods/noita-together/files/scripts/damage_received.lua",
+            execute_every_n_frame = -1
+        })
+    end
     local res_x = MagicNumbersGetValue("DESIGN_PLAYER_START_POS_X")
     local res_y = MagicNumbersGetValue("DESIGN_PLAYER_START_POS_Y")
     if (not GameHasFlagRun("NT_respawn_checkpoint_added")) then
@@ -289,8 +347,60 @@ function OnModInit()
     _G._ModTextFileGetContent = ModTextFileGetContent
 end
 
+-- The app writes the room's world seed to this file as soon as it knows it, so the
+-- first New Game already uses it. Without the file (or without io), the seed only
+-- arrives once the game connects to the app, which is after the world was made.
+local ROOM_SEED_FILE = "mods/noita-together/nt_room_seed.txt"
+
+local function parse_seed(text)
+    local seed = tonumber((text or ""):match("^%s*(%d+)"))
+    if seed ~= nil and seed >= 0 then return math.floor(seed) end
+    return nil
+end
+
+-- the second number, if any: this player's starting loadout shift (0 = none)
+local function parse_loadout(text)
+    local n = tonumber((text or ""):match("^%s*%d+%s+(%d+)"))
+    if n ~= nil and n > 0 then return math.floor(n) end
+    return 0
+end
+
+-- returns the seed, how it was read (for the log) and the loadout shift,
+-- or nil and why not
+local function room_seed_from_app()
+    -- straight from disk: always the current file
+    if io ~= nil and io.open ~= nil then
+        local ok, text = pcall(function()
+            local f = io.open(ROOM_SEED_FILE, "r")
+            if f == nil then return nil end
+            local t = f:read("*a")
+            f:close()
+            return t
+        end)
+        local seed = ok and parse_seed(text) or nil
+        if seed ~= nil then return seed, "io", parse_loadout(text) end
+    end
+    -- through Noita's own file access, in case io isn't available here
+    local get = ModTextFileGetContent or _G._ModTextFileGetContent
+    if get ~= nil then
+        local ok, text = pcall(get, ROOM_SEED_FILE)
+        local seed = ok and parse_seed(text) or nil
+        if seed ~= nil then return seed, "ModTextFileGetContent", parse_loadout(text) end
+    end
+    return nil, (io == nil and "no io, " or "") .. "no readable " .. ROOM_SEED_FILE
+end
+
 function OnModPreInit()
-    local seed = ModSettingGet( "noita_together.seed" )
+    local seed, how, loadout = room_seed_from_app()
+    -- only from the app's current file; never left over from an earlier room
+    ModSettingSet( "noita_together.loadout", loadout or 0 )
+    if (seed ~= nil) then
+        print("[NT] world seed from the app: " .. tostring(seed) .. " (" .. how .. "), loadout " .. tostring(loadout))
+        ModSettingSet( "noita_together.seed", seed )
+    else
+        seed = ModSettingGet( "noita_together.seed" )
+        print("[NT] no world seed from the app (" .. tostring(how) .. "), using the last one: " .. tostring(seed))
+    end
 
     if (seed == nil) then
         seed = 0

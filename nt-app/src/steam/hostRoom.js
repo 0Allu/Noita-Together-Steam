@@ -9,6 +9,7 @@
 // says otherwise.
 const { NT } = require("@noita-together/nt-message")
 const { v4: uuidv4 } = require("uuid")
+const { DataFilter } = require("./dataFilter")
 
 const SYSTEM_USER = { id: "-1", name: "[SYSTEM]" }
 // runtypes/room_opts.ts: printable ascii, 1-50 chars
@@ -16,6 +17,12 @@ const ASCII_RE = /^[\x20-\x7F]+$/
 // The server allowed up to 30 slots (120 for privileged users). There are no
 // privileged users without the auth server, so everyone gets the larger limit.
 const MAX_USERS_LIMIT = 120
+// "Filter invalid data" and "Kick repeat offenders" room options (host-side only)
+const FILTER_FLAG = "NT_filter_invalid_data"
+const FILTER_KICK_FLAG = "NT_filter_kick"
+const FILTER_KICK_AFTER = 5
+// count a player's floods, and tell the host about a problem, at most this often
+const FILTER_NOTICE_MS = 10000
 
 const lobbyMsg = (key, payload) => NT.Envelope.encode({ lobbyAction: { [key]: payload } }).finish()
 const gameMsg = (key, payload) => NT.Envelope.encode({ gameAction: { [key]: payload } }).finish()
@@ -111,6 +118,9 @@ function newCounters() {
     return c
 }
 
+/** NT_death_penalty values where one player's death ends the run for everyone */
+const RUN_ENDING_PENALTIES = ["end", "weak_respawn", "shared_health"]
+
 class RoomUser {
     constructor(id, name) {
         this.id = id
@@ -133,12 +143,14 @@ class HostRoom {
      * @param {(userId: string, msg: Uint8Array) => void} params.send
      * @param {() => void} [params.onLobbyStateChange] called when lobby-list info changes
      * @param {() => void} [params.onDestroyed]
+     * @param {() => void} [params.onRunOver] called when a run ends, however it ended
      */
-    constructor({ id, owner, opts, send, onLobbyStateChange, onDestroyed }) {
+    constructor({ id, owner, opts, send, onLobbyStateChange, onDestroyed, onRunOver }) {
         this.id = id
         this.sendRaw = send
         this.onLobbyStateChange = onLobbyStateChange || (() => {})
         this.onDestroyed = onDestroyed || (() => {})
+        this.onRunOver = onRunOver || (() => {})
 
         this.users = new Map()
         this.bannedUsers = new Set()
@@ -150,6 +162,8 @@ class HostRoom {
         this.maxUsers = opts.maxUsers
         this.locked = false
         this.inProgress = false
+        /** @type {Set<string>} players who died or won in this run */
+        this.runFinished = new Set()
 
         this.lastFlags = lobbyMsg("sRoomFlagsUpdated", {})
         /** @type {object[]} flags as last set by the host, with the seed filled in */
@@ -157,6 +171,12 @@ class HostRoom {
         this.sharedSeed = 0
         this.stats = null
         this.destroyed = false
+
+        this.filter = new DataFilter()
+        /** @type {Map<string, {count: number, notices: Map<string, number>}>} */
+        this.offences = new Map()
+        /** @type {import("./devBots").DevBots|null} fake players for testing (NT_DEV_BOTS) */
+        this.devBots = null
 
         this.owner = new RoomUser(owner.id, owner.name)
         this.users.set(this.owner.id, this.owner)
@@ -240,12 +260,21 @@ class HostRoom {
         if (!key || !payload) return
 
         if (key === "cJoinRoom") {
+            // not in the room yet, so just drop extra attempts quietly
+            if (this.hasFlag(FILTER_FLAG) && this.filter.check(fromId, key, payload)) return
             this.join(fromId, fromName, payload.password)
             return
         }
 
         const user = this.users.get(fromId)
         if (!user || !user.connected) return
+        if (user !== this.owner && this.hasFlag(FILTER_FLAG)) {
+            const reason = this.filter.check(user.id, key, payload, { bannedPerks: this.bannedPerks() })
+            if (reason) {
+                this.invalidData(user, reason)
+                return
+            }
+        }
         const handler = handlers[key]
         if (handler) {
             try {
@@ -253,6 +282,37 @@ class HostRoom {
             } catch (e) {
                 console.error(`[host] error handling ${key}`, e)
             }
+        }
+    }
+
+    hasFlag(name) {
+        return this.flags.some((f) => f.flag === name)
+    }
+
+    bannedPerks() {
+        const flag = this.flags.find((f) => f.flag === "NT_banned_perks")
+        return flag && flag.strVal ? flag.strVal.split(",").filter(Boolean) : []
+    }
+
+    /** A message from `user` was dropped by the data filter. */
+    invalidData(user, reason) {
+        const now = Date.now()
+        let o = this.offences.get(user.id)
+        if (!o) {
+            o = { count: 0, notices: new Map() }
+            this.offences.set(user.id, o)
+        }
+        // a flood drops many messages; count and report it like one problem
+        const last = o.notices.get(reason)
+        if (last !== undefined && now - last < FILTER_NOTICE_MS) return
+        o.notices.set(reason, now)
+        o.count++
+        console.log(`[host] dropped a message from ${user.name} (${user.id}): ${reason}`)
+        this.send(this.owner, chatMsg(SYSTEM_USER, `[Filter] ${user.name} ${reason}. The message was dropped.`))
+        if (this.hasFlag(FILTER_KICK_FLAG) && o.count >= FILTER_KICK_AFTER) {
+            this.offences.delete(user.id)
+            this.filter.forget(user.id)
+            this.removeUser(this.owner, user, "sUserKicked", "was kicked for sending invalid data.")
         }
     }
 
@@ -321,6 +381,7 @@ class HostRoom {
 
         this.broadcast(chatMsg(SYSTEM_USER, `${target.name} ${message}`))
         this.onLobbyStateChange()
+        this.endIfEveryoneDone()
     }
 
     part(actor) {
@@ -338,6 +399,7 @@ class HostRoom {
             this.broadcast(lobbyMsg("sUserLeftRoom", { userId: actor.id }))
             this.broadcast(chatMsg(SYSTEM_USER, `${actor.name} disconnected.`))
             this.onLobbyStateChange()
+            this.endIfEveryoneDone()
         } else {
             this.removeUser(null, actor, "sUserLeftRoom", "disconnected.")
         }
@@ -432,12 +494,26 @@ class HostRoom {
             this.allowedMods.set(user.id, user.mods())
         }
         this.inProgress = true
+        this.runFinished = new Set()
         this.broadcast(lobbyMsg("sHostStart", { forced: false }))
         this.onLobbyStateChange()
     }
 
+    /** The host pressed End Run: every game in the run ends, then the room's run does. */
+    endRun(actor) {
+        if (actor !== this.owner || !this.inProgress) return
+        this.broadcast(chatMsg(SYSTEM_USER, "The host ended the run."))
+        // only the room sends events as SYSTEM_USER, so the mod knows this came from the host
+        this.broadcast(gameMsg("sCustomModEvent", {
+            userId: SYSTEM_USER.id,
+            payload: JSON.stringify({ name: "EndRun" })
+        }))
+        this.finishRun(actor)
+    }
+
     finishRun(actor) {
-        if (actor !== this.owner) return
+        // the host's game also reports the end after End Run; count it once
+        if (actor !== this.owner || !this.inProgress) return
         if (this.stats) {
             this.broadcast(chatMsg(SYSTEM_USER, "Run stats:"))
             for (const line of this.stats.toChatLines()) {
@@ -445,6 +521,7 @@ class HostRoom {
             }
         }
         this.inProgress = false
+        this.runFinished = new Set()
         this.stats = null
         this.allowedMods = new Map()
         // users that dropped during the run no longer get a seat held for them
@@ -457,6 +534,31 @@ class HostRoom {
             this.publishFlags(this.flags)
         }
         this.onLobbyStateChange()
+        this.onRunOver()
+    }
+
+    /**
+     * A player died or won. In co-op, a death ends the run for everyone with these
+     * death penalties (the mod ends each game itself). Otherwise the run ends once
+     * every player still in it has died or won.
+     */
+    onPlayerFinished(user, payload) {
+        this.runFinished.add(user.id)
+        const penalty = this.flags.find((f) => f.flag === "NT_death_penalty")
+        const endsRun = penalty && RUN_ENDING_PENALTIES.includes(penalty.strVal)
+        if (this.gamemode === 0 && !payload.isWin && endsRun) {
+            this.finishRun(this.owner)
+            return
+        }
+        this.endIfEveryoneDone()
+    }
+
+    /** Ends the run once every player still in it has died or won. */
+    endIfEveryoneDone() {
+        if (!this.inProgress) return
+        // players the run started with (see startRun) who are still here
+        const playing = [...this.users.values()].filter((u) => u.connected && this.allowedMods.has(u.id))
+        if (playing.every((u) => this.runFinished.has(u.id))) this.finishRun(this.owner)
     }
 }
 
@@ -492,7 +594,9 @@ const lobbyHandlers = {
         this.startRun(user)
     },
     cRunOver(payload, user) {
-        this.finishRun(user)
+        // idk is an unused field from the old server; the app sets it for End Run
+        if (payload.idk) this.endRun(user)
+        else this.finishRun(user)
     },
     cRoomCreate(payload, user) {
         this.send(user, lobbyMsg("sRoomCreateFailed", { reason: "Already in a room." }))
@@ -507,6 +611,7 @@ const gameHandlers = {
         if (!this.inProgress) return
         const frames = Object.assign({}, payload, { userId: user.id })
         this.broadcast(gameMsg("sPlayerMoves", { userFrames: [frames] }), user.id)
+        if (this.devBots && user === this.owner) this.devBots.ownerMoved(payload)
     },
     cPlayerUpdate(payload, user) {
         if (!this.inProgress) return
@@ -587,11 +692,13 @@ const gameHandlers = {
         if (!this.inProgress) return
         if (this.stats) this.stats.increment(user, payload.isWin ? "UserWin" : "UserDeath")
         this.broadcast(gameMsg("sPlayerDeath", withUser(user, payload)), user.id)
+        this.onPlayerFinished(user, payload)
     },
     cChat(payload, user) {
         if (!payload.message) return
         const msg = payload.message
         if (user === this.owner && msg.startsWith("/")) {
+            if (this.devBots && this.devBots.command(msg)) return
             if (msg.toLowerCase() === "/endrun") this.finishRun(user)
             return
         }

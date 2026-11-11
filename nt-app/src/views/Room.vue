@@ -121,10 +121,25 @@
                   </div>
                 </td>
                 <td v-else-if="isHost">
-                  <vButton @click="startRun(false)" size="btn-small" class="btn-primary" title="Start the run for everyone who is ready">
-                    <i class="fas fa-play" slot="icon"></i>
-                    Start Run
-                  </vButton>
+                  <div class="row-actions">
+                    <vButton @click="startRun(false)" size="btn-small" class="btn-primary" title="Start the run for everyone who is ready">
+                      <i class="fas fa-play" slot="icon"></i>
+                      Start Run
+                    </vButton>
+                    <!-- asks for a second click instead of a popup; moving away or waiting cancels -->
+                    <vButton
+                      v-if="runInProgress"
+                      @click="endRunClick"
+                      @mouseleave.native="cancelEndRun"
+                      size="btn-small"
+                      class="end-run"
+                      :class="{ 'btn-danger': confirmEnd }"
+                      :title="confirmEnd ? 'Click again to end the run for everyone' : 'End the run for everyone'"
+                    >
+                      <i class="fas" :class="confirmEnd ? 'fa-exclamation-triangle' : 'fa-stop'" slot="icon"></i>
+                      {{ confirmEnd ? "Really end?" : "End Run" }}
+                    </vButton>
+                  </div>
                 </td>
               </tr>
               </tbody>
@@ -258,6 +273,9 @@ export default {
             lastMsg: Date.now(),
             locked: false,
             copied: false,
+            confirmEnd: false,
+            confirmEndAt: 0,
+            confirmEndTimer: null,
             lockedTitle: "Room is locked: no one new can join. Click to unlock.",
             unlockedTitle: "Lock the room so no one new can join"
         }
@@ -272,6 +290,9 @@ export default {
     },
     created() {
         ipcRenderer.send("game_listen")
+    },
+    beforeDestroy() {
+        clearTimeout(this.confirmEndTimer)
     },
     watch: {
         chat() {
@@ -313,6 +334,9 @@ export default {
         },
         userId() {
             return this.$store.getters.userId
+        },
+        runInProgress() {
+            return this.$store.state.runInProgress
         },
         isHost() {
             return this.$store.getters.isHost
@@ -437,11 +461,11 @@ export default {
                 return
             }
             if (Date.now() - this.lastMsg < 400) {
-                this.$store.dispatch("sendClientAlert", { message: "You are being rate limited!" })
+                this.$store.dispatch("sendClientAlert", { message: "You're sending messages too fast." })
                 return
             }
             if(this.chatMsg.length > 500){
-              this.$store.dispatch("sendClientAlert", { message: "Message too long! Try again with less than 500 characters!" })
+              this.$store.dispatch("sendClientAlert", { message: "That message is too long. Keep it under 500 characters." })
               return
             }
             this.$store.dispatch("sendChat", { message: this.chatMsg.trim() })
@@ -479,6 +503,23 @@ export default {
         },
         ban(userId) {
             this.$store.dispatch("banUser", { userId })
+        },
+        endRunClick() {
+            if (!this.confirmEnd) {
+                this.confirmEnd = true
+                this.confirmEndAt = Date.now()
+                clearTimeout(this.confirmEndTimer)
+                this.confirmEndTimer = setTimeout(this.cancelEndRun, 4000)
+                return
+            }
+            // the second click of a double-click doesn't count as confirming
+            if (Date.now() - this.confirmEndAt < 400) return
+            this.cancelEndRun()
+            this.$store.dispatch("endRun")
+        },
+        cancelEndRun() {
+            clearTimeout(this.confirmEndTimer)
+            this.confirmEnd = false
         },
         startRun(forced) {
             this.$store.dispatch("startRun", { forced })
@@ -635,6 +676,10 @@ export default {
 .row-actions {
     display: flex;
     gap: 4px;
+}
+
+.end-run {
+    min-width: 8.6em;
 }
 
 .row-actions > .btn,
