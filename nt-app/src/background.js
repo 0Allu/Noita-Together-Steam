@@ -30,9 +30,35 @@ if (isDevelopment && process.platform === 'win32') {
     }
 }
 */
-autoUpdater.on("update-downloaded", (info) => {
-    appEvent("UPDATE_DOWNLOADED", "")
+// Auto-update from the latest GitHub release (needs latest.yml, the installer and its
+// .blockmap uploaded to the release). Updates download in the background and install
+// when the app closes, or right away from the banner's "Restart now" button.
+const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000
+autoUpdater.autoDownload = true
+autoUpdater.autoInstallOnAppQuit = true
+autoUpdater.disableWebInstaller = true
+autoUpdater.logger = { info: () => {}, warn: (m) => console.log(`[updater] ${m}`), error: (m) => console.log(`[updater] ${m}`) }
+autoUpdater.on("error", (err) => {
+    // offline, GitHub down, or a release without latest.yml: try again later
+    console.log(`[updater] ${err && err.message}`)
 })
+autoUpdater.on("update-downloaded", (info) => {
+    appEvent("UPDATE_DOWNLOADED", { version: info && info.version })
+})
+ipcMain.on("install_update", () => {
+    // silent install, then start the new version
+    autoUpdater.quitAndInstall(true, true)
+})
+
+function checkForUpdates() {
+    autoUpdater.checkForUpdates().catch((err) => console.log(`[updater] ${err && err.message}`))
+}
+
+function startUpdateChecks() {
+    if (isDevelopment) return
+    checkForUpdates()
+    setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL_MS)
+}
 
 async function createWindow() {
     // Create the browser window.
@@ -68,10 +94,7 @@ async function createWindow() {
         */
         // Load the index.html when not in development
         mainWindow.loadURL("app://./index.html")
-        // Official releases on GitHub are the retired server-based client, so
-        // auto-updating from them would replace this Steam build. Re-enable
-        // once Steam builds are published as releases.
-        // if (!isDevelopment) autoUpdater.checkForUpdatesAndNotify()
+        startUpdateChecks()
     }
 }
 

@@ -10,7 +10,7 @@ module.exports = {
                     { from: "resources/steam", to: "steam" },
                     { from: "../noita_mod", to: "noita_mod" }
                 ],
-                artifactName: 'Noita-Together-Setup-${version}.${ext}',
+                artifactName: 'Noita-Together-Steam-Setup.${ext}',
                 win: {
                     target: "nsis",
                     requestedExecutionLevel: "requireAdministrator" //eugh
@@ -20,7 +20,8 @@ module.exports = {
                     oneClick: false,
                     allowToChangeInstallationDirectory: true
                 },
-                publish: ["github"]
+                // auto-update reads latest.yml from the newest release here
+                publish: [{ provider: "github", owner: "0Allu", repo: "Noita-Together-Steam" }]
             }
         }
     },

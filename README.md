@@ -124,9 +124,9 @@ To build the installer:
 yarn buildClient
 ```
 
-The installer ends up in `nt-app/dist_electron`, named
-`Noita-Together-Setup-<version>.exe`. Releases name it
-`Noita-Together-Steam-Setup.exe`, so rename it before uploading.
+The installer ends up in `nt-app/dist_electron` as
+`Noita-Together-Steam-Setup.exe`. The version number is in
+`nt-app/package.json`.
 
 With Node 17 or newer, set the OpenSSL option first. In PowerShell:
 
@@ -140,6 +140,24 @@ In Git Bash:
 ```sh
 NODE_OPTIONS=--openssl-legacy-provider yarn buildClient
 ```
+
+### Releasing
+
+The app checks this repository's latest GitHub release for updates when it
+starts and every 4 hours. It downloads a newer version in the background and
+installs it when the app closes, or right away from the "Restart now" button.
+
+1. Raise `"version"` in `nt-app/package.json`. The app only updates to a higher
+   version number.
+2. Build the installer with `yarn buildClient`.
+3. Create a GitHub release with a tag matching the version, like `v0.12.1`, and
+   upload these three files from `nt-app/dist_electron`:
+   - `Noita-Together-Steam-Setup.exe`
+   - `Noita-Together-Steam-Setup.exe.blockmap`
+   - `latest.yml`
+
+Without `latest.yml` on the latest release, installed apps can't see the
+update.
 
 ### Testing with Spacewar
 

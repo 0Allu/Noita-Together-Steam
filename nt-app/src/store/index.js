@@ -284,12 +284,8 @@ const ipcPlugin = (ipc) => {
         })
         */
 
-        ipc.on("UPDATE_DOWNLOADED", () => {
-            store.dispatch("errDialog", {
-                title: "Update available",
-                body: "App finished downloading an update and will apply the next time you launch.",
-                canClose: false
-            })
+        ipc.on("UPDATE_DOWNLOADED", (event, data) => {
+            store.commit("setUpdateReady", (data && data.version) || "new")
         })
 
         ipc.on("CONNECTION_LOST", (event, data) => {
@@ -427,6 +423,8 @@ export default new Vuex.Store({
         noitaConnected: false,
         // we started noita.exe and it hasn't exited
         noitaLaunched: false,
+        // version of a downloaded update that installs when the app closes
+        updateReady: "",
         roomTab: "0",
         room: {
             id: "",
@@ -639,6 +637,9 @@ export default new Vuex.Store({
         },
         setErrDialog: (state, payload) => {
             state.errDialog = payload
+        },
+        setUpdateReady: (state, version) => {
+            state.updateReady = version
         },
         showErrDialog: (state, payload) => {
             state.showErrDialog = payload

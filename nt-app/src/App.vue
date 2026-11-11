@@ -1,6 +1,26 @@
 <template>
     <div id="app" class="wrapper">
         <vHeader :title="title" />
+        <div v-if="updateReady && !updateDismissed" class="update-banner">
+            <i class="fas fa-arrow-circle-down"></i>
+            <span class="update-text">
+                Version {{ updateReady }} is ready. It installs when you close the app.
+            </span>
+            <button
+                v-if="!inRoom"
+                type="button"
+                class="update-action"
+                @click="installUpdate"
+            >Restart now</button>
+            <button
+                type="button"
+                class="update-close"
+                title="Hide"
+                @click="updateDismissed = true"
+            >
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
         <router-view />
         <vFooter />
 
@@ -26,11 +46,13 @@ import vFooter from "@/components/vFooter.vue";
 import vLoading from "@/components/vLoading.vue";
 import vErrDialog from "@/components/vErrDialog.vue";
 import vButton from "@/components/vButton.vue";
+import { ipcRenderer } from "electron";
 export default {
     components: { vHeader, vFooter, vLoading, vErrDialog, vButton },
     data() {
         return {
             title: "Noita Together",
+            updateDismissed: false,
         };
     },
     computed: {
@@ -43,10 +65,20 @@ export default {
         errDialog() {
             return this.$store.state.errDialog;
         },
+        updateReady() {
+            return this.$store.state.updateReady;
+        },
+        // restarting would close the room for everyone if we're hosting
+        inRoom() {
+            return !!this.$store.state.room.id;
+        },
     },
     methods: {
         closeErrDialog() {
             this.$store.commit("showErrDialog", false);
+        },
+        installUpdate() {
+            ipcRenderer.send("install_update");
         },
     },
 };
@@ -62,6 +94,59 @@ export default {
 
 body {
     overflow-y: hidden;
+}
+
+.update-banner + .content {
+    margin-top: 0;
+}
+
+.update-banner {
+    /* the header floats over the top 32px */
+    margin-top: 32px;
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.45em 0.8em;
+    background-color: #24412a;
+    border-left: solid 2px #2d2d2d;
+    border-right: solid 2px #2d2d2d;
+    font-size: 0.9em;
+}
+
+.update-banner > i {
+    color: #7fd18b;
+}
+
+.update-text {
+    flex-grow: 1;
+    font-size: 0.9em;
+}
+
+.update-action,
+.update-close {
+    border: none;
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
+.update-action {
+    padding: 0.3em 0.8em;
+    background-color: #3a8a47;
+    color: #fff;
+}
+
+.update-action:hover {
+    background-color: #46a055;
+}
+
+.update-close {
+    padding: 0.3em 0.4em;
+    background: none;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.update-close:hover {
+    color: #fff;
 }
 
 .wrapper {
