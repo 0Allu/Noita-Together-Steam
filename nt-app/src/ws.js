@@ -296,6 +296,12 @@ module.exports = (data) => {
         }
     })
 
+    // the host pressed Enter in Noita while waiting at the start: same as the Start Run button
+    noita.on("HostStartRun", () => {
+        if (!isHost) return
+        sendMsg(encodeLobbyMsg("cStartRun", { forced: false }))
+    })
+
     // End Run in the room: ends every player's game (see HostRoom.endRun)
     ipcMain.on("END_RUN", () => {
         if (!isHost) return

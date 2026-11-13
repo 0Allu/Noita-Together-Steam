@@ -50,6 +50,8 @@ export default {
         ipcRenderer.on("update_done", (event, data) => {
             this.success = data;
             this.done = true;
+            // nothing to look at when it worked; the screen stays up only on errors
+            if (data) this.ContinueLogin();
         });
 
         ipcRenderer.on("GAME_PATH_NOT_FOUND", () => {

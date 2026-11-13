@@ -22,8 +22,8 @@ use crossbeam_channel as channel;
 use steamworks::{
     networking_sockets::{ListenSocket, NetConnection, NetPollGroup},
     networking_types::{
-        ListenSocketEvent, NetConnectionEnd, NetworkingConnectionState, NetworkingIdentity,
-        SendFlags,
+        ListenSocketEvent, NetConnectionEnd, NetworkingConfigEntry, NetworkingConfigValue,
+        NetworkingConnectionState, NetworkingIdentity, SendFlags,
     },
     CallbackHandle, Client, ClientManager, LobbyChatUpdate, LobbyId, LobbyType, Matchmaking,
     SteamError, SteamId,
@@ -156,6 +156,14 @@ impl SendBacklog {
     }
 }
 
+/// No direct (ICE) connections: everything goes through Valve's relays, so players
+/// never learn each other's IP address. (0 = k_nSteamNetworkingConfig_P2P_Transport_ICE_Enable_Disable)
+/// Set on both ends: on the listen socket for connections we accept, and on the
+/// connections we start, so a modified client on the other end can't turn it back on.
+fn relay_only() -> [NetworkingConfigEntry; 1] {
+    [NetworkingConfigEntry::new_int32(NetworkingConfigValue::P2PTransportICEEnable, 0)]
+}
+
 struct Connections {
     client: Client,
 
@@ -173,7 +181,7 @@ impl Connections {
         let my_id = client.user().steam_id();
         let networking_sockets = client.networking_sockets();
         let listen_socket = networking_sockets
-            .create_listen_socket_p2p(0, None)
+            .create_listen_socket_p2p(0, relay_only())
             .expect("handle to be valid"); // Unclear in what cases this can fail.
         let poll_group = networking_sockets.create_poll_group();
         Connections {
@@ -203,11 +211,25 @@ impl Connections {
         while let Some(event) = self.listen_socket.try_receive_event() {
             match event {
                 ListenSocketEvent::Connecting(event) => {
-                    info!("Peer {:?} connecting", event.remote());
-                    event
-                        .accept()
-                        .inspect_err(|e| warn!("Error when accepting connection: {}", e))
-                        .ok();
+                    // Only lobby members we expect a connection from (see `connect`). Anyone on
+                    // Steam can try to connect to us; turning them away before accepting keeps
+                    // the connection from being set up at all. A member whose connection
+                    // arrives before we've seen them join is turned away too, and simply
+                    // retries (their side reconnects when the connection is closed).
+                    let expected = event
+                        .remote()
+                        .steam_id()
+                        .is_some_and(|id| self.peers.contains_key(&id));
+                    if expected {
+                        info!("Peer {:?} connecting", event.remote());
+                        event
+                            .accept()
+                            .inspect_err(|e| warn!("Error when accepting connection: {}", e))
+                            .ok();
+                    } else {
+                        info!("Rejecting a connection from {:?}: not a lobby member we expect", event.remote());
+                        event.reject(NetConnectionEnd::AppGeneric, Some("Not in the lobby"));
+                    }
                 }
                 ListenSocketEvent::Connected(event) => {
                     if let Some(connection) = event
@@ -312,7 +334,7 @@ impl Connections {
         } else {
             info!("Initiating connection to {:?}", peer);
             let connection = networking_sockets
-                .connect_p2p(peer_identity, 0, None)
+                .connect_p2p(peer_identity, 0, relay_only())
                 .expect("handle to be valid");
             connection.set_poll_group(&self.poll_group);
             self.peers

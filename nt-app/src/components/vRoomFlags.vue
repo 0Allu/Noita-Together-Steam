@@ -1,8 +1,15 @@
 <template>
-    <vModal ref="vFlagsModal">
+    <vModal ref="vFlagsModal" class="options-modal">
         <h1 slot="header" class="options-title">
             Game Options
             <span v-if="!isHost" class="options-readonly">Only the host can change these</span>
+            <button
+                class="options-close"
+                :title="isHost ? 'Close without applying (Esc)' : 'Close (Esc)'"
+                @click="close"
+            >
+                <i class="fas fa-times"></i>
+            </button>
         </h1>
         <template slot="body">
           <div class="options">
@@ -293,6 +300,12 @@ export default {
         this.tempFlags = obj
         this.gamemode = this.$store.getters.roomGamemode
     },
+    mounted() {
+        window.addEventListener("keydown", this.onKeydown)
+    },
+    beforeDestroy() {
+        window.removeEventListener("keydown", this.onKeydown)
+    },
     data() {
         return {
             gamemode: null,
@@ -532,6 +545,10 @@ export default {
         randomizeSeed() {
             this.tempFlags.NT_sync_world_seed.value = Math.floor(Math.random() * 4294967295) + 1
         },
+        // Esc closes like the X (the perk search uses Esc itself and stops it first)
+        onKeydown(e) {
+            if (e.key === "Escape") this.close()
+        },
         close() {
             this.$emit("close")
         }
@@ -549,6 +566,42 @@ export default {
 .options-readonly {
     font-size: 0.45em;
     color: rgba(255, 255, 255, 0.5);
+}
+
+/* the header (and its X) stays at the top while the options scroll */
+.options-modal .modal-header {
+    position: sticky;
+    top: -1.2em;
+    z-index: 5;
+    margin: -1.2em -1.3em 0;
+    padding: 1.2em 1.3em 0.5em;
+    background-color: rgb(37, 37, 37);
+}
+
+.options-modal .modal-header h1 {
+    margin-bottom: 0;
+}
+
+.options-close {
+    align-self: center;
+    margin-left: auto;
+    padding: 0.2em 0.45em;
+    background: none;
+    border: 1px solid transparent;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.7em;
+    cursor: pointer;
+    transition: color 0.2s, background-color 0.2s, border-color 0.2s;
+}
+
+.options-close:hover {
+    color: #fff;
+    background-color: #363636;
+    border-color: #6a6a6a;
+}
+
+.options-close:focus {
+    outline: none;
 }
 
 .options {

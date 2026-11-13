@@ -225,6 +225,9 @@ function OnWorldPostUpdate()
                 StartRun()
             end
 
+            --the host pressed Enter to start the run
+            HostStartRunTick()
+
             --BOSS FIGHT CHECK
             CoopBossFightTick()
 

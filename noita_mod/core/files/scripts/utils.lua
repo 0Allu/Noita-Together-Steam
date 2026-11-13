@@ -411,10 +411,15 @@ function GetLastCheckPoint()
     return x, y --justin case? 
 end
 
--- What last hurt the player (from damage_received.lua), like "Hiisi Shotgunner (projectile)".
+-- What killed the player (from damage_received.lua), like "Hiisi Shotgunner (projectile)":
+-- the hit that took them to 0 hp, or what last hurt them if there wasn't one.
 function LastDamageCause()
     local who = GlobalsGetValue("NT_last_damage_by", "")
     local msg = GlobalsGetValue("NT_last_damage_msg", "")
+    if GlobalsGetValue("NT_fatal_damage_set", "0") == "1" then
+        who = GlobalsGetValue("NT_fatal_damage_by", "")
+        msg = GlobalsGetValue("NT_fatal_damage_msg", "")
+    end
     if who ~= "" then who = GameTextGetTranslatedOrNot(who) end
     if msg ~= "" then msg = GameTextGetTranslatedOrNot(msg) end
     if who:find("DEBUG_NAME", 1, true) then who = "" end
@@ -428,6 +433,22 @@ function LastDamageCause()
     return cause
 end
 
+-- The game over screen names the last damage the player took. Stop everything except the
+-- mod's own kill (curse damage), so fire, lava or poison landing in the same few frames
+-- can't replace the cause.
+local OTHER_DAMAGE = { "melee", "projectile", "explosion", "electricity", "fire", "drill", "slice",
+    "ice", "physics_hit", "radioactive", "poison", "overeating", "holy" }
+function StopOtherDamage(damage_model)
+    for _, kind in ipairs(OTHER_DAMAGE) do
+        pcall(ComponentObjectSetValue2, damage_model, "damage_multipliers", kind, 0)
+    end
+    pcall(ComponentSetValue2, damage_model, "materials_damage", false)
+    pcall(ComponentSetValue2, damage_model, "is_on_fire", false)
+    pcall(ComponentSetValue2, damage_model, "fire_probability_of_ignition", 0)
+    pcall(ComponentSetValue2, damage_model, "air_needed", false)
+    pcall(ComponentSetValue2, damage_model, "falling_damages", false)
+end
+
 -- Kill the player with a damage message, so the game over screen shows `cause` instead of
 -- "deferred death". If that doesn't kill them (Saving Grace, invulnerability), KillPlayerTick
 -- falls back to the old kill a few frames later.
@@ -439,8 +460,16 @@ function KillPlayerWithCause(entity, cause)
     local damage_model = EntityGetFirstComponent(entity, "DamageModelComponent")
     if damage_model == nil then return end
     if cause == nil or cause == "" then cause = "?" end
+    GlobalsSetValue("NT_killing_player", "1")
+    StopOtherDamage(damage_model)
     ComponentSetValue2(damage_model, "wait_for_kill_flag_on_death", false)
-    local hp = math.max(0, ComponentGetValue2(damage_model, "hp"))
+    -- The player whose death ended the run is already below 0 hp, and a hit then doesn't
+    -- count as their death. Give them a sliver of hp so this hit is the one that kills them.
+    local hp = ComponentGetValue2(damage_model, "hp")
+    if hp <= 0 then
+        hp = 0.04
+        ComponentSetValue2(damage_model, "hp", hp)
+    end
     local max_hp = ComponentGetValue2(damage_model, "max_hp")
     EntityInflictDamage(entity, hp + max_hp + 100, "DAMAGE_CURSE", cause, "NORMAL", 0, 0, 0)
 end
@@ -454,13 +483,13 @@ function KillPlayerTick()
         local polymorphed, entity_id = IsPlayerPolymorphed()
         if polymorphed then player = entity_id end
     end
-    if player ~= nil then
-        local damage_model = EntityGetFirstComponent(player, "DamageModelComponent")
-        if damage_model ~= nil then
-            ComponentSetValue2(damage_model, "hp", 0.0)
-            ComponentSetValue2(damage_model, "kill_now", true)
-        end
-    end
+    -- Only if the kill didn't land: the kill always starts them above 0 hp, so a player still
+    -- above 0 wasn't killed. Killing a dying player again can replace their game over cause.
+    if player == nil then return end
+    local damage_model = EntityGetFirstComponent(player, "DamageModelComponent")
+    if damage_model == nil or ComponentGetValue2(damage_model, "hp") <= 0 then return end
+    ComponentSetValue2(damage_model, "hp", 0.0)
+    ComponentSetValue2(damage_model, "kill_now", true)
     GameTriggerGameOver()
 end
 
@@ -616,6 +645,10 @@ function IsPlayerDead()
 
     if (damage_models ~= nil) then
         local curHp = ComponentGetValue2(damage_models, "hp")
+        -- still alive (Saving Grace, a respawn): that hit didn't kill them after all
+        if (curHp > 0.0 and GlobalsGetValue("NT_fatal_damage_set", "0") == "1") then
+            GlobalsSetValue("NT_fatal_damage_set", "0")
+        end
         if (curHp < 0.0) then
             if (GameHasFlagRun("ending_game_completed")) then
                 ComponentSetValue2(damage_models, "kill_now", true)
@@ -851,6 +884,22 @@ function GetStuff(data)
     ret.anim = tonumber(table.remove(data,1))
     ret.h = tonumber(table.remove(data,1))
     return ret
+end
+
+-- The host can start the run from the game: Enter while everyone waits at the start.
+-- The app sends it on like the Start Run button (see "HostStartRun" in ws.js).
+local KEY_RETURN, KEY_KP_ENTER = 40, 88
+local start_key_frame = -1000
+function HostStartRunTick()
+    if (NT.run_started or _start_run) then return end
+    if (not GameHasFlagRun("NT_is_host")) then return end
+    if (type(InputIsKeyJustDown) ~= "function") then return end
+    if (not (InputIsKeyJustDown(KEY_RETURN) or InputIsKeyJustDown(KEY_KP_ENTER))) then return end
+    -- once every few seconds at most, in case the start takes a moment to arrive
+    local frame = GameGetFrameNum()
+    if (frame - start_key_frame < 180) then return end
+    start_key_frame = frame
+    SendWsEvent({ event = "HostStartRun", payload = {} })
 end
 
 function StartRun()

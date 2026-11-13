@@ -4,6 +4,7 @@ noitatogether_died_respawning_2,If host has kick on death active you are already
 noitatogether_host_changed_seed,Host changed world seed! Start a new game,,,,,,,,,,,,host changed world seed message,
 noitatogether_host_ended_run,The host ended the run,,,,,,,,,,,,game over message when the host ends the run from the app,
 noitatogether_wait_for_start,Waiting for host to start the run,,,,,,,,,,,,message while locked waiting for host to start run,
+noitatogether_host_start_hint,Press Enter to start the run,,,,,,,,,,,,shown to the host instead of waiting for host,
 noitatogether_run_started_title,Run Started,,,,,,,,,,,,title of run started important message,
 noitatogether_run_started_subtitle,Have fun,,,,,,,,,,,,subtitle of run started important message,
 noitatogether_mountain,Mountain,,,,,,,,,,,,name of Mountain used as catchall location,
