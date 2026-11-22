@@ -52,10 +52,11 @@
                         v-model="tempFlags[id].value"
                         :disabled="!isHost"
                     >
-                        <span>{{ flagInfo(id).name }}</span>
-                        <vTooltip>
-                            <span>{{ tooltip(id, false) }}</span>
-                        </vTooltip>
+                        <span>{{ flagInfo(id).name }}
+                            <vTooltip>
+                                <span>{{ tooltip(id, false) }}</span>
+                            </vTooltip>
+                        </span>
                     </vSwitch>
                 </div>
 
@@ -169,10 +170,11 @@
                         :disabled="!isHost"
                         class="seed-switch"
                     >
-                        <span>{{ flagInfo("NT_random_shared_seed").name }}</span>
-                        <vTooltip>
-                            <span>{{ tooltip("NT_random_shared_seed", false) }}</span>
-                        </vTooltip>
+                        <span>{{ flagInfo("NT_random_shared_seed").name }}
+                            <vTooltip>
+                                <span>{{ tooltip("NT_random_shared_seed", false) }}</span>
+                            </vTooltip>
+                        </span>
                     </vSwitch>
                     <div class="field-row seed-row">
                         <label class="field">
@@ -702,7 +704,13 @@ export default {
 .seed-switch {
     display: flex;
     align-items: center;
-    white-space: nowrap;
+}
+
+/* long names wrap to a second line instead of running into the next column */
+.switches > div > span,
+.seed-switch > span {
+    min-width: 0;
+    overflow-wrap: break-word;
 }
 
 .seed-switch {

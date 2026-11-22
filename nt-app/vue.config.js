@@ -18,7 +18,9 @@ module.exports = {
                 nsis: {
                     perMachine: true,
                     oneClick: false,
-                    allowToChangeInstallationDirectory: true
+                    allowToChangeInstallationDirectory: true,
+                    // "automatic updates" page + saving that choice
+                    include: "installer/installer.nsh"
                 },
                 // auto-update reads latest.yml from the newest release here
                 publish: [{ provider: "github", owner: "0Allu", repo: "Noita-Together-Steam" }]

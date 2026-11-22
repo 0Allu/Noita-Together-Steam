@@ -46,6 +46,9 @@ export default {
     width: 30px;
     height: 17px;
     margin: 0.2em;
+    /* keep its size inside flex rows: its children are hidden or absolutely
+       positioned, so without this a long label squeezes it down to nothing */
+    flex: none;
 }
 
 /* Hide default HTML checkbox */

@@ -547,6 +547,12 @@ export default {
     gap: 0.6em;
 }
 
+/* Leave Room: same height as the buttons in .room-edit, which fill the header */
+.room-header > .btn {
+    align-self: stretch;
+    flex-shrink: 0;
+}
+
 .room-title > h1 {
     margin: 0;
     overflow: hidden;
@@ -706,7 +712,7 @@ export default {
         margin-right: 0;
     }
     .room-title > h1 {
-        font-size: 1.5em;
+        font-size: 1.15em;
     }
 }
 

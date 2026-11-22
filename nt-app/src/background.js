@@ -11,6 +11,7 @@ const appEvent = require("./appEvent")
 const wsClient = require("./ws.js")
 const cmdLineArgs = require("./cmdLineArgs")
 const steamBridge = require("./steam/bridge")
+const { getAutoUpdate, setAutoUpdate } = require("./autoUpdateSetting")
 // "Start Noita" button (Steam won't start Noita while we're signed in as it)
 require("./launchNoita")
 const isDevelopment = process.env.NODE_ENV !== "production"
@@ -33,22 +34,89 @@ if (isDevelopment && process.platform === 'win32') {
 // Auto-update from the latest GitHub release (needs latest.yml, the installer and its
 // .blockmap uploaded to the release). Updates download in the background and install
 // when the app closes, or right away from the banner's "Restart now" button.
+// With automatic updates off (installer checkbox or the footer toggle), the app
+// still checks, but only shows "version X is available" until the user asks for it.
 const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000
-autoUpdater.autoDownload = true
+// stays off until the setting has been read, so no check can start a download early
+autoUpdater.autoDownload = false
 autoUpdater.autoInstallOnAppQuit = true
 autoUpdater.disableWebInstaller = true
 autoUpdater.logger = { info: () => {}, warn: (m) => console.log(`[updater] ${m}`), error: (m) => console.log(`[updater] ${m}`) }
+
+const updateState = {
+    autoUpdate: true,
+    available: "", // newest version on GitHub, if newer than this one
+    downloading: false,
+    downloaded: "" // version waiting to install
+}
+const autoUpdateRead = getAutoUpdate().then((on) => {
+    updateState.autoUpdate = on
+    autoUpdater.autoDownload = on
+})
+
+function sendUpdateState() {
+    appEvent("UPDATE_STATE", Object.assign({}, updateState))
+}
+
 autoUpdater.on("error", (err) => {
     // offline, GitHub down, or a release without latest.yml: try again later
     console.log(`[updater] ${err && err.message}`)
+    if (updateState.downloading) {
+        updateState.downloading = false
+        sendUpdateState()
+    }
+})
+autoUpdater.on("update-available", (info) => {
+    updateState.available = (info && info.version) || "new"
+    // with autoDownload on, electron-updater has already started downloading it
+    if (autoUpdater.autoDownload) updateState.downloading = true
+    sendUpdateState()
 })
 autoUpdater.on("update-downloaded", (info) => {
-    appEvent("UPDATE_DOWNLOADED", { version: info && info.version })
+    updateState.downloading = false
+    updateState.downloaded = (info && info.version) || updateState.available || "new"
+    sendUpdateState()
 })
 ipcMain.on("install_update", () => {
     // silent install, then start the new version
     autoUpdater.quitAndInstall(true, true)
 })
+ipcMain.on("download_update", () => {
+    downloadUpdate()
+})
+ipcMain.handle("get_update_state", async () => {
+    await autoUpdateRead
+    return Object.assign({}, updateState)
+})
+ipcMain.handle("set_auto_update", async (event, on) => {
+    on = !!on
+    try {
+        await setAutoUpdate(on)
+    } catch (err) {
+        console.log(`[updater] couldn't save the auto-update setting: ${err && err.message}`)
+        return Object.assign({}, updateState)
+    }
+    updateState.autoUpdate = on
+    autoUpdater.autoDownload = on
+    if (on) {
+        // turned back on: fetch what's already known to be out, or look now
+        if (updateState.available) downloadUpdate()
+        else if (!isDevelopment) checkForUpdates()
+    }
+    sendUpdateState()
+    return Object.assign({}, updateState)
+})
+
+function downloadUpdate() {
+    if (isDevelopment || !updateState.available || updateState.downloading || updateState.downloaded) return
+    updateState.downloading = true
+    sendUpdateState()
+    autoUpdater.downloadUpdate().catch((err) => {
+        console.log(`[updater] ${err && err.message}`)
+        updateState.downloading = false
+        sendUpdateState()
+    })
+}
 
 function checkForUpdates() {
     autoUpdater.checkForUpdates().catch((err) => console.log(`[updater] ${err && err.message}`))
@@ -56,8 +124,10 @@ function checkForUpdates() {
 
 function startUpdateChecks() {
     if (isDevelopment) return
-    checkForUpdates()
-    setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL_MS)
+    autoUpdateRead.then(() => {
+        checkForUpdates()
+        setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL_MS)
+    })
 }
 
 async function createWindow() {

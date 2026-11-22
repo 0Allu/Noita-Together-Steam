@@ -1,17 +1,29 @@
 <template>
     <div id="app" class="wrapper">
         <vHeader :title="title" />
-        <div v-if="updateReady && !updateDismissed" class="update-banner">
+        <div v-if="showUpdateBanner && !updateDismissed" class="update-banner">
             <i class="fas fa-arrow-circle-down"></i>
-            <span class="update-text">
-                Version {{ updateReady }} is ready. It installs when you close the app.
+            <span v-if="update.downloaded" class="update-text">
+                Version {{ update.downloaded }} is ready. It installs when you close the app.
+            </span>
+            <span v-else-if="update.downloading" class="update-text">
+                Downloading version {{ update.available }}...
+            </span>
+            <span v-else class="update-text">
+                Version {{ update.available }} is available.
             </span>
             <button
-                v-if="!inRoom"
+                v-if="update.downloaded && !inRoom"
                 type="button"
                 class="update-action"
                 @click="installUpdate"
             >Restart now</button>
+            <button
+                v-else-if="!update.downloaded && !update.downloading"
+                type="button"
+                class="update-action"
+                @click="downloadUpdate"
+            >Download</button>
             <button
                 type="button"
                 class="update-close"
@@ -65,8 +77,13 @@ export default {
         errDialog() {
             return this.$store.state.errDialog;
         },
-        updateReady() {
-            return this.$store.state.updateReady;
+        update() {
+            return this.$store.state.update;
+        },
+        // with automatic updates on, a download happens unseen until it's ready
+        showUpdateBanner() {
+            const u = this.update;
+            return !!(u.downloaded || (!u.autoUpdate && u.available));
         },
         // restarting would close the room for everyone if we're hosting
         inRoom() {
@@ -79,6 +96,15 @@ export default {
         },
         installUpdate() {
             ipcRenderer.send("install_update");
+        },
+        downloadUpdate() {
+            ipcRenderer.send("download_update");
+        },
+    },
+    watch: {
+        // a hidden "available" banner comes back once that update is ready
+        "update.downloaded"() {
+            this.updateDismissed = false;
         },
     },
 };
