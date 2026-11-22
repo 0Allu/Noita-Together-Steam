@@ -4,6 +4,24 @@ Play alone together, now over Steam.
 
 [Download the latest release](../../releases/latest)
 
+## Table of Contents
+
+- [About this fork](#about-this-fork)
+- [What is Noita Together?](#what-is-noita-together)
+- [Installing](#installing)
+- [Playing](#playing)
+  - [Room options added in this fork](#room-options-added-in-this-fork)
+- [Demo images](#demo-images)
+- [Building](#building)
+  - [Requirements](#requirements)
+  - [Commands](#commands)
+  - [Releasing](#releasing)
+  - [Testing with Spacewar](#testing-with-spacewar)
+  - [Testing alone with bots](#testing-alone-with-bots)
+  - [The mod](#the-mod)
+  - [Repository layout](#repository-layout)
+- [Credits](#credits)
+
 ## About this fork
 
 [Noita Together](https://github.com/Noita-Together/noita-together) was
@@ -35,7 +53,9 @@ Lua mod that talks to the app from inside the game. The mod uses
 
 1. Download `Noita-Together-Steam-Setup.exe` from the
    [releases page](../../releases/latest) and run it. The installer isn't
-   signed, so Windows may warn you before it runs.
+   signed, so Windows may warn you before it runs. The installer asks whether
+   the app should update itself. You can change that later with the
+   Auto-update switch at the bottom of the app.
 2. Start Steam and sign in with an account that owns Noita.
 3. Open Noita Together. It finds your Noita folder (or asks for it) and
    installs the mod from its own copy, so nothing is downloaded.
@@ -60,6 +80,8 @@ incompatible version don't show up in the list.
   Steam app ID, like Entangled Worlds), so Steam's Play button turns into Stop.
   Start the game with the Start Noita button in the room instead. Pressing Stop
   in Steam closes the app.
+- The host starts the run with Start Run in the app, or by pressing Enter in
+  Noita while everyone waits at the start.
 - During a run, the host can end it for everyone with End Run, next to Start
   Run. Click it, then click it again within 4 seconds to confirm. Everyone's
   game ends with "The host ended the run".
@@ -93,6 +115,20 @@ incompatible version don't show up in the list.
   Kick repeat offenders kicks a player after 5 dropped messages.
 - Game options are grouped into sections, and options that don't apply to the
   current settings are hidden.
+
+## Demo images
+
+### Creating a new room
+
+<img src="assets/create-room-demo.png" alt="Creating a new room" width="55%">
+
+### Room UI
+
+<img src="assets/room-demo.png" alt="The room screen" width="80%">
+
+### Room options menu
+
+<img src="assets/options-demo.png" alt="The Game options menu" width="50%">
 
 ## Building
 
@@ -158,8 +194,12 @@ NODE_OPTIONS=--openssl-legacy-provider yarn buildClient
 ### Releasing
 
 The app checks this repository's latest GitHub release for updates when it
-starts and every 4 hours. It downloads a newer version in the background and
-installs it when the app closes, or right away from the "Restart now" button.
+starts and every 4 hours. With automatic updates on (the default), it
+downloads a newer version in the background and installs it when the app
+closes, or right away from the "Restart now" button. With them off, it shows
+a banner with a Download button and waits for the player to press it. The
+choice is saved in the registry under `HKLM\Software\Noita Together Steam`,
+by the installer and by the Auto-update switch in the app's footer.
 
 1. Raise `"version"` in `nt-app/package.json`. The app only updates to a higher
    version number.
